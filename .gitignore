@@ -1,0 +1,7 @@
+/target
+
+# Ignore images
+*.png
+*.dpf
+*.raw
+*.rgba
