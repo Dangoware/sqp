@@ -5,4 +5,4 @@ edition = "2021"
 
 [dependencies]
 byteorder = "1.5.0"
-image = "0.25.2"
+image = { version = "0.25.2", default-features = false, features = ["png"] }
