@@ -1,5 +1,7 @@
 /target
 
+Cargo.lock
+
 # Ignore images
 *.png
 *.dpf
