@@ -8,6 +8,16 @@ pub struct Header {
     pub height: u32,
 }
 
+impl Default for Header {
+    fn default() -> Self {
+        Self {
+            magic: *b"dangoimg",
+            width: 0,
+            height: 0,
+        }
+    }
+}
+
 impl Header {
     pub fn to_bytes(&self) -> [u8; 16] {
         let mut buf = Cursor::new(Vec::new());

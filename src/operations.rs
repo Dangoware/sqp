@@ -1,3 +1,54 @@
+pub fn line_diff(width: u32, height: u32, data: &[u8]) -> Vec<u8> {
+    let mut output_buf = Vec::with_capacity((width * height * 4) as usize);
+
+    let block_height = (f32::ceil(height as f32 / 3.0) as u16) as u32;
+
+    let mut curr_line;
+    let mut prev_line = Vec::with_capacity(width as usize * 3);
+
+    let mut curr_alpha;
+    let mut prev_alpha = Vec::with_capacity(width as usize);
+
+    let mut rgb_index = 0;
+    let mut alpha_index = (width * height * 3) as usize;
+    for y in 0..height {
+        curr_line = data[rgb_index..rgb_index + width as usize * 3].to_vec();
+        curr_alpha = data[alpha_index..alpha_index + width as usize].to_vec();
+
+        if y % block_height != 0 {
+            curr_line
+                .iter_mut()
+                .zip(&prev_line)
+                .for_each(|(curr_p, prev_p)| {
+                    *curr_p = curr_p.wrapping_add(*prev_p);
+                });
+            curr_alpha
+                .iter_mut()
+                .zip(&prev_alpha)
+                .for_each(|(curr_a, prev_a)| {
+                    *curr_a = curr_a.wrapping_add(*prev_a);
+                });
+        }
+
+        // Write the decoded RGBA data to the final buffer
+        curr_line
+            .windows(3)
+            .step_by(3)
+            .zip(&curr_alpha)
+            .for_each(|(curr_p, alpha_p)| {
+                output_buf.extend_from_slice(&[curr_p[0], curr_p[1], curr_p[2], *alpha_p]);
+            });
+
+        prev_line.clone_from(&curr_line);
+        prev_alpha.clone_from(&curr_alpha);
+
+        rgb_index += width as usize * 3;
+        alpha_index += width as usize;
+    }
+
+    output_buf
+}
+
 pub fn diff_line(width: u32, height: u32, input: &[u8]) -> Vec<u8> {
     let mut data = Vec::with_capacity(width as usize * 3);
     let mut alpha_data = Vec::with_capacity(width as usize);

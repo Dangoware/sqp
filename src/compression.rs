@@ -1,6 +1,6 @@
-use std::{collections::HashMap, io::Write};
+use std::{collections::HashMap, io::{Read, Write}};
 
-use byteorder::{WriteBytesExt, LE};
+use byteorder::{ReadBytesExt, WriteBytesExt, LE};
 
 use crate::binio::BitIo;
 
@@ -20,14 +20,8 @@ pub struct CompressionInfo {
     /// Number of compression chunks
     pub chunk_count: usize,
 
-    /// Total size of the data when compressed
-    pub total_size_compressed: usize,
-
     /// The compression chunk information
     pub chunks: Vec<ChunkInfo>,
-
-    /// Length of the compression chunk info
-    pub length: usize,
 }
 
 impl CompressionInfo {
@@ -46,7 +40,7 @@ impl CompressionInfo {
     }
 }
 
-pub fn compress2(data: &[u8]) -> (Vec<u8>, CompressionInfo) {
+pub fn compress(data: &[u8]) -> (Vec<u8>, CompressionInfo) {
     let mut part_data;
 
     let mut offset = 0;
@@ -59,7 +53,7 @@ pub fn compress2(data: &[u8]) -> (Vec<u8>, CompressionInfo) {
     };
 
     loop {
-        (count, part_data, last) = compress_lzw2(&data[offset..], last);
+        (count, part_data, last) = compress_lzw(&data[offset..], last);
         if count == 0 {
             break;
         }
@@ -79,11 +73,10 @@ pub fn compress2(data: &[u8]) -> (Vec<u8>, CompressionInfo) {
         panic!("No chunks compressed!")
     }
 
-    output_info.total_size_compressed = output_buf.len();
     (output_buf, output_info)
 }
 
-fn compress_lzw2(data: &[u8], last: Vec<u8>) -> (usize, Vec<u8>, Vec<u8>) {
+fn compress_lzw(data: &[u8], last: Vec<u8>) -> (usize, Vec<u8>, Vec<u8>) {
     let mut count = 0;
     let mut dictionary = HashMap::new();
     for i in 0..=255 {
@@ -136,7 +129,7 @@ fn compress_lzw2(data: &[u8], last: Vec<u8>) -> (usize, Vec<u8>, Vec<u8>) {
             }
         }
         return (count, bit_io.bytes(), Vec::new());
-    } else if bit_io.byte_size() < 0x87BDF {
+    } else if dictionary_count < 0x3FFFE {
         if !last_element.is_empty() {
             write_bit(&mut bit_io, *dictionary.get(&last_element).unwrap());
         }
@@ -144,4 +137,69 @@ fn compress_lzw2(data: &[u8], last: Vec<u8>) -> (usize, Vec<u8>, Vec<u8>) {
     }
 
     (count, bit_io.bytes(), last_element)
+}
+
+pub fn decompress<T: ReadBytesExt + Read>(
+    input: &mut T,
+    chunk_info: &CompressionInfo,
+) -> Vec<u8> {
+    let mut output_buf: Vec<u8> = vec![];
+
+    for block in &chunk_info.chunks {
+        let mut buffer = vec![0u8; block.size_compressed];
+        input.read_exact(&mut buffer).unwrap();
+
+        let raw_buf = decompress_lzw(&buffer, block.size_raw);
+
+        output_buf.write_all(&raw_buf).unwrap();
+    }
+
+    output_buf
+}
+
+fn decompress_lzw(input_data: &[u8], size: usize) -> Vec<u8> {
+    let mut data = input_data.to_vec();
+    let mut dictionary = HashMap::new();
+    for i in 0..256 {
+        dictionary.insert(i as u64, vec![i as u8]);
+    }
+    let mut dictionary_count = dictionary.len() as u64;
+    let mut result = Vec::with_capacity(size);
+
+    let data_size = input_data.len();
+    data.extend_from_slice(&[0, 0]);
+    let mut bit_io = BitIo::new(data);
+    let mut w = dictionary.get(&0).unwrap().clone();
+
+    let mut element;
+    loop {
+        let flag = bit_io.read_bit(1);
+        if flag == 0 {
+            element = bit_io.read_bit(15);
+        } else {
+            element = bit_io.read_bit(18);
+        }
+
+        if bit_io.byte_offset() > data_size {
+            break;
+        }
+
+        let mut entry;
+        if let Some(x) = dictionary.get(&element) {
+            // If the element was already in the dict, get it
+            entry = x.clone()
+        } else if element == dictionary_count {
+            entry = w.clone();
+            entry.push(w[0])
+        } else {
+            panic!("Bad compressed element: {}", element)
+        }
+
+        result.write_all(&entry).unwrap();
+        w.push(entry[0]);
+        dictionary.insert(dictionary_count, w.clone());
+        dictionary_count += 1;
+        w.clone_from(&entry);
+    }
+    result
 }
