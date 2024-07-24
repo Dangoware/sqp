@@ -11,7 +11,7 @@ use picture::DangoPicture;
 use image::RgbaImage;
 
 fn main() {
-    let image_data = image::open("test.png").unwrap().to_rgba8();
+    let image_data = image::open("clouds_dark.png").unwrap().to_rgba8();
     let encoded_dpf = DangoPicture {
         header: Header {
             width: image_data.width(),
@@ -24,7 +24,6 @@ fn main() {
 
     let mut outfile = File::create("test.dpf").unwrap();
     encoded_dpf.encode(&mut outfile);
-
 
     let mut infile = File::open("test.dpf").unwrap();
     let decoded_dpf = DangoPicture::decode(&mut infile);

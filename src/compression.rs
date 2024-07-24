@@ -1,8 +1,8 @@
-use std::{collections::HashMap, io::{Read, Write}};
+use std::{collections::HashMap, io::{Cursor, Read, Write}};
 
 use byteorder::{ReadBytesExt, WriteBytesExt, LE};
 
-use crate::binio::BitIo;
+use crate::binio::{BitReader, BitWriter};
 
 /// The size of compressed data in each chunk
 #[derive(Debug, Clone, Copy)]
@@ -89,8 +89,9 @@ fn compress_lzw(data: &[u8], last: Vec<u8>) -> (usize, Vec<u8>, Vec<u8>) {
         element = last
     }
 
-    let mut bit_io = BitIo::new(vec![0u8; 0xF0000]);
-    let write_bit = |bit_io: &mut BitIo, code: u64| {
+    let mut output_buf = Vec::new();
+    let mut bit_io = BitWriter::new(&mut output_buf);
+    let write_bit = |bit_io: &mut BitWriter<Vec<u8>>, code: u64| {
         if code > 0x7FFF {
             bit_io.write_bit(1, 1);
             bit_io.write_bit(code, 18);
@@ -128,15 +129,18 @@ fn compress_lzw(data: &[u8], last: Vec<u8>) -> (usize, Vec<u8>, Vec<u8>) {
                 write_bit(&mut bit_io, *dictionary.get(&vec![c]).unwrap());
             }
         }
-        return (count, bit_io.bytes(), Vec::new());
+        drop(bit_io);
+        return (count, output_buf, Vec::new());
     } else if dictionary_count < 0x3FFFE {
         if !last_element.is_empty() {
             write_bit(&mut bit_io, *dictionary.get(&last_element).unwrap());
         }
-        return (count, bit_io.bytes(), Vec::new());
+        drop(bit_io);
+        return (count, output_buf, Vec::new());
     }
 
-    (count, bit_io.bytes(), last_element)
+    drop(bit_io);
+    (count, output_buf, last_element)
 }
 
 pub fn decompress<T: ReadBytesExt + Read>(
@@ -159,6 +163,8 @@ pub fn decompress<T: ReadBytesExt + Read>(
 
 fn decompress_lzw(input_data: &[u8], size: usize) -> Vec<u8> {
     let mut data = input_data.to_vec();
+    data.extend_from_slice(&[0, 0]);
+    let mut data = Cursor::new(data);
     let mut dictionary = HashMap::new();
     for i in 0..256 {
         dictionary.insert(i as u64, vec![i as u8]);
@@ -167,8 +173,8 @@ fn decompress_lzw(input_data: &[u8], size: usize) -> Vec<u8> {
     let mut result = Vec::with_capacity(size);
 
     let data_size = input_data.len();
-    data.extend_from_slice(&[0, 0]);
-    let mut bit_io = BitIo::new(data);
+
+    let mut bit_io = BitReader::new(&mut data);
     let mut w = dictionary.get(&0).unwrap().clone();
 
     let mut element;
