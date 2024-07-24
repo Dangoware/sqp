@@ -4,33 +4,34 @@ mod operations;
 mod binio;
 mod picture;
 
-use std::fs::File;
+use std::{fs::File, io::{BufReader, BufWriter}, time::Instant};
 use header::Header;
 use picture::DangoPicture;
 
 use image::RgbaImage;
 
 fn main() {
-    let image_data = image::open("clouds_dark.png").unwrap().to_rgba8();
-    let encoded_dpf = DangoPicture {
-        header: Header {
-            width: image_data.width(),
-            height: image_data.height(),
+    let image_data = image::open("small_transparency.png").unwrap().to_rgba8();
+    let encoded_dpf = DangoPicture::from_raw(
+        image_data.width(),
+        image_data.height(),
+        &image_data
+    );
 
-            ..Default::default()
-        },
-        bitmap: image_data.into_vec(),
-    };
-
-    let mut outfile = File::create("test.dpf").unwrap();
+    let timer = Instant::now();
+    let mut outfile = BufWriter::new(File::create("test.dpf").unwrap());
     encoded_dpf.encode(&mut outfile);
+    println!("Encoding took {}ms", timer.elapsed().as_millis());
 
-    let mut infile = File::open("test.dpf").unwrap();
-    let decoded_dpf = DangoPicture::decode(&mut infile);
+    let timer = Instant::now();
+    let mut infile = BufReader::new(File::open("test.dpf").unwrap());
+    let decoded_dpf = DangoPicture::decode(&mut infile).unwrap();
+    println!("Decoding took {}ms", timer.elapsed().as_millis());
+
     let out_image = RgbaImage::from_raw(
         decoded_dpf.header.width,
         decoded_dpf.header.height,
-        decoded_dpf.bitmap
+        decoded_dpf.bitmap.into()
     ).unwrap();
     out_image.save("test.png").unwrap();
 }

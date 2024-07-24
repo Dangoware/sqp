@@ -162,9 +162,7 @@ pub fn decompress<T: ReadBytesExt + Read>(
 }
 
 fn decompress_lzw(input_data: &[u8], size: usize) -> Vec<u8> {
-    let mut data = input_data.to_vec();
-    data.extend_from_slice(&[0, 0]);
-    let mut data = Cursor::new(data);
+    let mut data = Cursor::new(input_data);
     let mut dictionary = HashMap::new();
     for i in 0..256 {
         dictionary.insert(i as u64, vec![i as u8]);
@@ -179,15 +177,15 @@ fn decompress_lzw(input_data: &[u8], size: usize) -> Vec<u8> {
 
     let mut element;
     loop {
+        if bit_io.byte_offset() >= data_size - 1 {
+            break;
+        }
+
         let flag = bit_io.read_bit(1);
         if flag == 0 {
             element = bit_io.read_bit(15);
         } else {
             element = bit_io.read_bit(18);
-        }
-
-        if bit_io.byte_offset() > data_size {
-            break;
         }
 
         let mut entry;

@@ -1,7 +1,9 @@
+use image::{DynamicImage, GrayImage};
+
 pub fn line_diff(width: u32, height: u32, data: &[u8]) -> Vec<u8> {
     let mut output_buf = Vec::with_capacity((width * height * 4) as usize);
 
-    let block_height = (f32::ceil(height as f32 / 3.0) as u16) as u32;
+    let block_height = f32::ceil(height as f32 / 3.0) as u32;
 
     let mut curr_line;
     let mut prev_line = Vec::with_capacity(width as usize * 3);
@@ -53,7 +55,7 @@ pub fn diff_line(width: u32, height: u32, input: &[u8]) -> Vec<u8> {
     let mut data = Vec::with_capacity(width as usize * 3);
     let mut alpha_data = Vec::with_capacity(width as usize);
 
-    let block_height = (f32::ceil(height as f32 / 3.0) as u16) as usize;
+    let block_height = f32::ceil(height as f32 / 3.0) as u32;
     let pixel_byte_count = 4;
     let line_byte_count = (width * pixel_byte_count as u32) as usize;
 
@@ -68,8 +70,7 @@ pub fn diff_line(width: u32, height: u32, input: &[u8]) -> Vec<u8> {
         curr_line = input[i..i + line_byte_count]
             .windows(4)
             .step_by(4)
-            .flat_map(|r| &r[0..3])
-            .copied()
+            .flat_map(|r| [r[0], r[1], r[2]])
             .collect();
         curr_alpha = input[i..i + line_byte_count]
             .iter()

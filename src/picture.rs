@@ -1,6 +1,7 @@
 use std::io::{Read, Write};
 
 use byteorder::{ReadBytesExt, WriteBytesExt, LE};
+use thiserror::Error;
 
 use crate::{compression::{compress, decompress, ChunkInfo, CompressionInfo}, header::Header, operations::{diff_line, line_diff}};
 
@@ -35,9 +36,13 @@ impl DangoPicture {
     }
 
     /// Decode the image from anything that implements [Read]
-    pub fn decode<I: Read + ReadBytesExt>(mut input: I) -> DangoPicture {
+    pub fn decode<I: Read + ReadBytesExt>(mut input: I) -> Result<DangoPicture, Error> {
         let mut magic = [0u8; 8];
         input.read_exact(&mut magic).unwrap();
+
+        if magic != *b"dangoimg" {
+            return Err(Error::InvalidIdentifier(magic))
+        }
 
         let header = Header {
             magic,
@@ -58,11 +63,32 @@ impl DangoPicture {
         }
 
         let preprocessed_bitmap = decompress(&mut input, &compression_info);
+
         let bitmap = line_diff(header.width, header.height, &preprocessed_bitmap);
+
+        Ok(DangoPicture {
+            header,
+            bitmap
+        })
+    }
+
+    pub fn from_raw(width: u32, height: u32, bitmap: &[u8]) -> Self {
+        let header = Header {
+            width,
+            height,
+
+            ..Default::default()
+        };
 
         DangoPicture {
             header,
-            bitmap
+            bitmap: bitmap.into(),
         }
     }
+}
+
+#[derive(Error, Debug)]
+pub enum Error {
+    #[error("incorrect identifier, got {}", 0)]
+    InvalidIdentifier([u8; 8]),
 }
