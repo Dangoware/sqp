@@ -4,7 +4,7 @@ use std::{
 };
 
 use byteorder::{ReadBytesExt, WriteBytesExt, LE};
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use rayon::iter::{IntoParallelRefIterator, ParallelExtend, ParallelIterator};
 use thiserror::Error;
 
 use crate::binio::{BitReader, BitWriter};
@@ -47,8 +47,11 @@ impl CompressionInfo {
 
 #[derive(Debug, Error)]
 enum CompressionError {
-    #[error("bad compressed element \"{}\" at position {}", 0, 1)]
-    BadElement(u8, usize)
+    #[error("bad compressed element \"{1}\" at byte {2}")]
+    BadElement(Vec<u8>, u64, usize),
+
+    #[error("no chunks compressed")]
+    NoChunks,
 }
 
 pub fn compress(data: &[u8]) -> (Vec<u8>, CompressionInfo) {
@@ -156,23 +159,46 @@ fn compress_lzw(data: &[u8], last: Vec<u8>) -> (usize, Vec<u8>, Vec<u8>) {
     (count, output_buf, last_element)
 }
 
-pub fn decompress<T: ReadBytesExt + Read>(input: &mut T, chunk_info: &CompressionInfo) -> Vec<u8> {
-    let mut output_buf: Vec<u8> = vec![];
-
+pub fn decompress<T: ReadBytesExt + Read>(
+    input: &mut T,
+    compression_info: &CompressionInfo
+) -> Vec<u8> {
+    // Read the compressd chunks from the input stream into memory
     let mut compressed_chunks = Vec::new();
-    for chunk_info in &chunk_info.chunks {
-        let mut buffer = vec![0u8; chunk_info.size_compressed];
+    let mut total_size_raw = 0;
+    for (i, block_info) in compression_info.chunks.iter().enumerate() {
+        let mut buffer = vec![0u8; block_info.size_compressed];
         input.read_exact(&mut buffer).unwrap();
 
-        compressed_chunks.push((buffer, chunk_info.size_raw));
+        compressed_chunks.push((buffer, block_info.size_raw, i));
+        total_size_raw += block_info.size_raw;
     }
 
-    let decompressed_chunks: Vec<Vec<u8>> = compressed_chunks
-        .par_iter()
-        .map(|chunk| decompress_lzw(&chunk.0, chunk.1).unwrap())
-        .collect();
+    // Process the compressed chunks in parallel
+    let mut output_buf: Vec<u8> = Vec::with_capacity(total_size_raw);
+    output_buf.par_extend(
+        compressed_chunks
+            .par_iter()
+            .flat_map(|chunk| {
+                let error = match decompress_lzw(&chunk.0, chunk.1) {
+                    Ok(result) => return result,
+                    Err(err) => err,
+                };
 
-    decompressed_chunks.iter().for_each(|c| output_buf.write_all(&c).unwrap());
+                println!("{} in block {}", error, chunk.2);
+
+                let partial = match error {
+                    CompressionError::BadElement(partial, _, _) => partial,
+                    _ => vec![],
+                };
+
+                let mut out = vec![0; chunk.1];
+
+                out[..partial.len()].copy_from_slice(&partial);
+
+                out
+            })
+    );
 
     output_buf
 }
@@ -214,7 +240,7 @@ fn decompress_lzw(input_data: &[u8], size: usize) -> Result<Vec<u8>, Compression
             entry = w.clone();
             entry.push(w[0])
         } else {
-            panic!("Bad compressed element: {}", element)
+            return Err(CompressionError::BadElement(result, element, bit_io.byte_offset()))
         }
 
         result.write_all(&entry).unwrap();
