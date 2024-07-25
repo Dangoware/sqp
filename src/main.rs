@@ -1,23 +1,24 @@
 mod compression {
+    pub mod dct;
     pub mod lossless;
 }
+mod binio;
 mod header;
 mod operations;
-mod binio;
 mod picture;
 
-use std::{fs::File, io::{BufReader, BufWriter}, time::Instant};
 use picture::DangoPicture;
+use std::{
+    fs::File,
+    io::{BufReader, BufWriter},
+    time::Instant,
+};
 
 use image::RgbaImage;
 
 fn main() {
     let image_data = image::open("littlespace.png").unwrap().to_rgba8();
-    let encoded_dpf = DangoPicture::from_raw(
-        image_data.width(),
-        image_data.height(),
-        &image_data
-    );
+    let encoded_dpf = DangoPicture::from_raw(image_data.width(), image_data.height(), &image_data);
 
     let timer = Instant::now();
     let mut outfile = BufWriter::new(File::create("test.dpf").unwrap());
@@ -32,7 +33,8 @@ fn main() {
     let out_image = RgbaImage::from_raw(
         decoded_dpf.header.width,
         decoded_dpf.header.height,
-        decoded_dpf.bitmap.into()
-    ).unwrap();
+        decoded_dpf.bitmap.into(),
+    )
+    .unwrap();
     out_image.save("test.png").unwrap();
 }

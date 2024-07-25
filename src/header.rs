@@ -1,5 +1,5 @@
-use std::io::{Cursor, Write};
 use byteorder::{WriteBytesExt, LE};
+use std::io::{Cursor, Write};
 
 pub struct Header {
     pub magic: [u8; 8],

@@ -1,4 +1,7 @@
-use std::{collections::HashMap, io::{Cursor, Read, Write}};
+use std::{
+    collections::HashMap,
+    io::{Cursor, Read, Write},
+};
 
 use byteorder::{ReadBytesExt, WriteBytesExt, LE};
 
@@ -118,7 +121,7 @@ fn compress_lzw(data: &[u8], last: Vec<u8>) -> (usize, Vec<u8>, Vec<u8>) {
 
         if dictionary_count >= 0x3FFFE {
             count -= 1;
-            break
+            break;
         }
     }
 
@@ -145,10 +148,7 @@ fn compress_lzw(data: &[u8], last: Vec<u8>) -> (usize, Vec<u8>, Vec<u8>) {
     (count, output_buf, last_element)
 }
 
-pub fn decompress<T: ReadBytesExt + Read>(
-    input: &mut T,
-    chunk_info: &CompressionInfo,
-) -> Vec<u8> {
+pub fn decompress<T: ReadBytesExt + Read>(input: &mut T, chunk_info: &CompressionInfo) -> Vec<u8> {
     let mut output_buf: Vec<u8> = vec![];
 
     for block in &chunk_info.chunks {
@@ -172,7 +172,6 @@ fn decompress_lzw(input_data: &[u8], size: usize) -> Vec<u8> {
         dictionary.insert(i as u64, vec![i as u8]);
     }
     let mut dictionary_count = dictionary.len() as u64;
-
 
     let mut result = Vec::with_capacity(size);
     let data_size = input_data.len();

@@ -99,13 +99,14 @@ impl<'a, O: Write + WriteBytesExt> BitWriter<'a, O> {
             panic!("Must write 1 or more bytes.")
         }
 
-        self.output.write_all(&data.to_le_bytes()[..byte_len]).unwrap();
+        self.output
+            .write_all(&data.to_le_bytes()[..byte_len])
+            .unwrap();
         self.byte_offset += byte_len;
 
         self.byte_size = self.byte_offset + (self.bit_offset + 7) / 8;
     }
 }
-
 
 /// A simple way to read individual bits from an input implementing [Read].
 pub struct BitReader<'a, I: Read + ReadBytesExt> {

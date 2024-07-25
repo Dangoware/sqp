@@ -6,7 +6,7 @@ use thiserror::Error;
 use crate::{
     compression::lossless::{compress, decompress, ChunkInfo, CompressionInfo},
     header::Header,
-    operations::{diff_line, line_diff}
+    operations::{diff_line, line_diff},
 };
 
 pub struct DangoPicture {
@@ -45,7 +45,7 @@ impl DangoPicture {
         input.read_exact(&mut magic).unwrap();
 
         if magic != *b"dangoimg" {
-            return Err(Error::InvalidIdentifier(magic))
+            return Err(Error::InvalidIdentifier(magic));
         }
 
         let header = Header {
@@ -70,10 +70,7 @@ impl DangoPicture {
 
         let bitmap = line_diff(header.width, header.height, &preprocessed_bitmap);
 
-        Ok(DangoPicture {
-            header,
-            bitmap
-        })
+        Ok(DangoPicture { header, bitmap })
     }
 
     pub fn from_raw(width: u32, height: u32, bitmap: &[u8]) -> Self {
