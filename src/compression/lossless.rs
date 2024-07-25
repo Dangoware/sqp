@@ -4,6 +4,8 @@ use std::{
 };
 
 use byteorder::{ReadBytesExt, WriteBytesExt, LE};
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use thiserror::Error;
 
 use crate::binio::{BitReader, BitWriter};
 
@@ -41,6 +43,12 @@ impl CompressionInfo {
 
         Ok(())
     }
+}
+
+#[derive(Debug, Error)]
+enum CompressionError {
+    #[error("bad compressed element \"{}\" at position {}", 0, 1)]
+    BadElement(u8, usize)
 }
 
 pub fn compress(data: &[u8]) -> (Vec<u8>, CompressionInfo) {
@@ -151,25 +159,31 @@ fn compress_lzw(data: &[u8], last: Vec<u8>) -> (usize, Vec<u8>, Vec<u8>) {
 pub fn decompress<T: ReadBytesExt + Read>(input: &mut T, chunk_info: &CompressionInfo) -> Vec<u8> {
     let mut output_buf: Vec<u8> = vec![];
 
-    for block in &chunk_info.chunks {
-        let mut buffer = vec![0u8; block.size_compressed];
+    let mut compressed_chunks = Vec::new();
+    for chunk_info in &chunk_info.chunks {
+        let mut buffer = vec![0u8; chunk_info.size_compressed];
         input.read_exact(&mut buffer).unwrap();
 
-        let raw_buf = decompress_lzw(&buffer, block.size_raw);
-
-        output_buf.write_all(&raw_buf).unwrap();
+        compressed_chunks.push((buffer, chunk_info.size_raw));
     }
+
+    let decompressed_chunks: Vec<Vec<u8>> = compressed_chunks
+        .par_iter()
+        .map(|chunk| decompress_lzw(&chunk.0, chunk.1).unwrap())
+        .collect();
+
+    decompressed_chunks.iter().for_each(|c| output_buf.write_all(&c).unwrap());
 
     output_buf
 }
 
-fn decompress_lzw(input_data: &[u8], size: usize) -> Vec<u8> {
+fn decompress_lzw(input_data: &[u8], size: usize) -> Result<Vec<u8>, CompressionError> {
     let mut data = Cursor::new(input_data);
 
     // Build the initial dictionary of 256 values
-    let mut dictionary = HashMap::new();
+    let mut dictionary = Vec::new();
     for i in 0..256 {
-        dictionary.insert(i as u64, vec![i as u8]);
+        dictionary.push(vec![i as u8]);
     }
     let mut dictionary_count = dictionary.len() as u64;
 
@@ -177,7 +191,7 @@ fn decompress_lzw(input_data: &[u8], size: usize) -> Vec<u8> {
     let data_size = input_data.len();
 
     let mut bit_io = BitReader::new(&mut data);
-    let mut w = dictionary.get(&0).unwrap().clone();
+    let mut w = dictionary.get(0).unwrap().clone();
 
     let mut element;
     loop {
@@ -193,7 +207,7 @@ fn decompress_lzw(input_data: &[u8], size: usize) -> Vec<u8> {
         }
 
         let mut entry;
-        if let Some(x) = dictionary.get(&element) {
+        if let Some(x) = dictionary.get(element as usize) {
             // If the element was already in the dict, get it
             entry = x.clone()
         } else if element == dictionary_count {
@@ -205,9 +219,10 @@ fn decompress_lzw(input_data: &[u8], size: usize) -> Vec<u8> {
 
         result.write_all(&entry).unwrap();
         w.push(entry[0]);
-        dictionary.insert(dictionary_count, w.clone());
+        dictionary.push(w.clone());
         dictionary_count += 1;
         w.clone_from(&entry);
     }
-    result
+
+    Ok(result)
 }
