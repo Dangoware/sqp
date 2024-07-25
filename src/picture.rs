@@ -3,7 +3,11 @@ use std::io::{Read, Write};
 use byteorder::{ReadBytesExt, WriteBytesExt, LE};
 use thiserror::Error;
 
-use crate::{compression::{compress, decompress, ChunkInfo, CompressionInfo}, header::Header, operations::{diff_line, line_diff}};
+use crate::{
+    compression::lossless::{compress, decompress, ChunkInfo, CompressionInfo},
+    header::Header,
+    operations::{diff_line, line_diff}
+};
 
 pub struct DangoPicture {
     pub header: Header,
@@ -58,7 +62,7 @@ impl DangoPicture {
         for _ in 0..compression_info.chunk_count {
             compression_info.chunks.push(ChunkInfo {
                 size_compressed: input.read_u32::<LE>().unwrap() as usize,
-                                         size_raw: input.read_u32::<LE>().unwrap() as usize,
+                size_raw: input.read_u32::<LE>().unwrap() as usize,
             });
         }
 

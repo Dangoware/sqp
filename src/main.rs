@@ -1,17 +1,18 @@
-mod compression;
+mod compression {
+    pub mod lossless;
+}
 mod header;
 mod operations;
 mod binio;
 mod picture;
 
 use std::{fs::File, io::{BufReader, BufWriter}, time::Instant};
-use header::Header;
 use picture::DangoPicture;
 
 use image::RgbaImage;
 
 fn main() {
-    let image_data = image::open("small_transparency.png").unwrap().to_rgba8();
+    let image_data = image::open("littlespace.png").unwrap().to_rgba8();
     let encoded_dpf = DangoPicture::from_raw(
         image_data.width(),
         image_data.height(),

@@ -129,17 +129,19 @@ fn compress_lzw(data: &[u8], last: Vec<u8>) -> (usize, Vec<u8>, Vec<u8>) {
                 write_bit(&mut bit_io, *dictionary.get(&vec![c]).unwrap());
             }
         }
-        drop(bit_io);
+
+        bit_io.flush();
         return (count, output_buf, Vec::new());
     } else if dictionary_count < 0x3FFFE {
         if !last_element.is_empty() {
             write_bit(&mut bit_io, *dictionary.get(&last_element).unwrap());
         }
-        drop(bit_io);
+
+        bit_io.flush();
         return (count, output_buf, Vec::new());
     }
 
-    drop(bit_io);
+    bit_io.flush();
     (count, output_buf, last_element)
 }
 
@@ -163,13 +165,16 @@ pub fn decompress<T: ReadBytesExt + Read>(
 
 fn decompress_lzw(input_data: &[u8], size: usize) -> Vec<u8> {
     let mut data = Cursor::new(input_data);
+
+    // Build the initial dictionary of 256 values
     let mut dictionary = HashMap::new();
     for i in 0..256 {
         dictionary.insert(i as u64, vec![i as u8]);
     }
     let mut dictionary_count = dictionary.len() as u64;
-    let mut result = Vec::with_capacity(size);
 
+
+    let mut result = Vec::with_capacity(size);
     let data_size = input_data.len();
 
     let mut bit_io = BitReader::new(&mut data);

@@ -2,6 +2,7 @@ use std::io::{Read, Write};
 
 use byteorder::{ReadBytesExt, WriteBytesExt};
 
+/// A simple way to write individual bits to an input implementing [Write].
 pub struct BitWriter<'a, O: Write + WriteBytesExt> {
     output: &'a mut O,
 
@@ -14,7 +15,8 @@ pub struct BitWriter<'a, O: Write + WriteBytesExt> {
 }
 
 impl<'a, O: Write + WriteBytesExt> BitWriter<'a, O> {
-    /// Create a new BitIO reader and writer over some data
+    /// Create a new BitWriter wrapper around something which
+    /// implements [Write].
     pub fn new(output: &'a mut O) -> Self {
         Self {
             output,
@@ -28,15 +30,40 @@ impl<'a, O: Write + WriteBytesExt> BitWriter<'a, O> {
         }
     }
 
-    /// Get the byte size of the reader
+    /// Get the number of whole bytes written to the stream.
     pub fn byte_size(&self) -> usize {
         self.byte_size
     }
 
-    /// Write some bits to the buffer
+    /// Get the bit offset within the current byte.
+    pub fn bit_offset(&self) -> u8 {
+        self.bit_offset as u8
+    }
+
+    /// Check if the stream is aligned to a byte.
+    pub fn aligned(&self) -> bool {
+        if self.bit_offset() == 0 {
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Align the writer to the nearest byte by padding with zero bits.
+    pub fn flush(&mut self) {
+        self.byte_offset += 1;
+
+        // Write out the current byte unfinished
+        self.output.write_u8(self.current_byte).unwrap();
+        self.current_byte = 0;
+    }
+
+    /// Write some bits to the output.
     pub fn write_bit(&mut self, data: u64, bit_len: usize) {
-        if bit_len > 8 * 8 {
-            panic!("Cannot write more than 64 bits at once");
+        if bit_len > 64 {
+            panic!("Cannot write more than 64 bits at once.");
+        } else if bit_len == 0 {
+            panic!("Must write 1 or more bits.")
         }
 
         if bit_len % 8 == 0 && self.bit_offset == 0 {
@@ -64,9 +91,12 @@ impl<'a, O: Write + WriteBytesExt> BitWriter<'a, O> {
         self.byte_size = self.byte_offset + (self.bit_offset + 7) / 8;
     }
 
+    /// Write some bytes to the output.
     pub fn write(&mut self, data: u64, byte_len: usize) {
         if byte_len > 8 {
-            panic!("Cannot write more than 8 bytes at once")
+            panic!("Cannot write more than 8 bytes at once.")
+        } else if byte_len == 0 {
+            panic!("Must write 1 or more bytes.")
         }
 
         self.output.write_all(&data.to_le_bytes()[..byte_len]).unwrap();
@@ -76,12 +106,8 @@ impl<'a, O: Write + WriteBytesExt> BitWriter<'a, O> {
     }
 }
 
-impl<'a, O: Write + WriteBytesExt> Drop for BitWriter<'_, O> {
-    fn drop(&mut self) {
-        let _ = self.output.write_u8(self.current_byte);
-    }
-}
 
+/// A simple way to read individual bits from an input implementing [Read].
 pub struct BitReader<'a, I: Read + ReadBytesExt> {
     input: &'a mut I,
 
@@ -89,13 +115,11 @@ pub struct BitReader<'a, I: Read + ReadBytesExt> {
 
     byte_offset: usize,
     bit_offset: usize,
-
-    byte_size: usize,
 }
 
-
 impl<'a, I: Read + ReadBytesExt> BitReader<'a, I> {
-    /// Create a new BitIO reader and writer over some data
+    /// Create a new BitReader wrapper around something which
+    /// implements [Write].
     pub fn new(input: &'a mut I) -> Self {
         let first = input.read_u8().unwrap();
         Self {
@@ -105,25 +129,20 @@ impl<'a, I: Read + ReadBytesExt> BitReader<'a, I> {
 
             byte_offset: 0,
             bit_offset: 0,
-
-            byte_size: 0,
         }
     }
 
-    /// Get the byte size of the reader
+    /// Get the number of whole bytes read from the stream.
     pub fn byte_offset(&self) -> usize {
         self.byte_offset
     }
 
-    /// Get the byte size of the reader
-    pub fn byte_size(&self) -> usize {
-        self.byte_size
-    }
-
-    /// Read some bits from the buffer
+    /// Read some bits from the input.
     pub fn read_bit(&mut self, bit_len: usize) -> u64 {
-        if bit_len > 8 * 8 {
-            panic!("Cannot read more than 64 bits")
+        if bit_len > 64 {
+            panic!("Cannot read more than 64 bits at once.")
+        } else if bit_len == 0 {
+            panic!("Must read 1 or more bits.")
         }
 
         if bit_len % 8 == 0 && self.bit_offset == 0 {
@@ -148,14 +167,12 @@ impl<'a, I: Read + ReadBytesExt> BitReader<'a, I> {
         result
     }
 
-    /// Read some bytes from the buffer
+    /// Read some bytes from the input.
     pub fn read(&mut self, byte_len: usize) -> u64 {
         if byte_len > 8 {
-            panic!("Cannot read more than 8 bytes")
-        }
-
-        if self.current_byte.is_none() {
-            self.current_byte = Some(self.input.read_u8().unwrap());
+            panic!("Cannot read more than 8 bytes at once.")
+        } else if byte_len == 0 {
+            panic!("Must read 1 or more bytes")
         }
 
         let mut padded_slice = vec![0u8; byte_len];
