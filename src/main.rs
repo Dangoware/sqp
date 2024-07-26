@@ -10,45 +10,25 @@ pub mod picture;
 use picture::DangoPicture;
 use std::{
     fs::File,
-    io::{BufReader, BufWriter},
+    io::{BufReader, BufWriter, Write},
     time::Instant,
 };
-use compression::dct::{dct, dequantize, idct, quantization_matrix, quantize};
+use compression::{dct::{dct, dct_compress, dequantize, idct, quantization_matrix, quantize}, lossless};
 
 use image::{ColorType, DynamicImage, GenericImage, GrayImage, Luma, Rgba};
 
 fn main() {
-    let input = image::open("scaramouche.png").unwrap().to_luma8();
+    let input = image::open("transparent.png").unwrap().to_luma8();
     input.save("original.png").unwrap();
 
-    let new_width = input.width() as usize + (8 - input.width() % 8) as usize;
-    let new_height = input.height() as usize + (8 - input.height() % 8) as usize;
-    let mut img_2d: Vec<Vec<u8>> = input.windows(input.width() as usize).step_by(input.width() as usize).map(|r| r.to_vec()).collect();
-    img_2d.iter_mut().for_each(|r| r.resize(new_width, 0));
-    img_2d.resize(new_height, vec![0u8; new_width]);
-
-    let timer = Instant::now();
-    let mut dct_image = Vec::new();
-    for h in 0..new_height / 8 {
-        for w in 0..new_width / 8 {
-            let mut chunk = Vec::new();
-            for i in 0..8 {
-                let row = &img_2d[(h * 8) + i][w * 8..(w * 8) + 8];
-                chunk.extend_from_slice(&row);
-            }
-
-            // Perform the DCT on the image section
-            let dct: Vec<f32> = dct(&chunk, 8, 8);
-            let quantzied_dct = quantize(&dct, quantization_matrix(80));
-
-            dct_image.push(quantzied_dct);
-        }
-    }
-    println!("Encoding took {}ms", timer.elapsed().as_millis());
+    let (dct_image, new_width, new_height) = dct_compress(input.as_raw(), input.width(), input.height(), 100);
+    let compressed_dct = lossless::compress(&dct_image.iter().flatten().flat_map(|b| b.to_le_bytes()).collect::<Vec<u8>>());
+    let mut dct_save = File::create("dct_raw.dct").unwrap();
+    dct_save.write_all(&compressed_dct.0).unwrap();
 
     let mut decoded_image = GrayImage::new(new_width as u32, new_height as u32);
     for (i, chunk) in dct_image.iter().enumerate() {
-        let dequantized_dct = dequantize(chunk, quantization_matrix(80));
+        let dequantized_dct = dequantize(chunk, quantization_matrix(100));
         let original = idct(&dequantized_dct, 8, 8);
 
         // Write rows of blocks

@@ -31,3 +31,11 @@ impl Header {
         buf.into_inner().try_into().unwrap()
     }
 }
+
+pub enum ColorFormat {
+    /// RGBA, 8 bits per channel
+    Rgba32,
+
+    /// RGB, 8 bits per channel
+    Rgb24,
+}
