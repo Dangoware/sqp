@@ -1,5 +1,7 @@
 use std::f32::consts::{PI, SQRT_2};
 
+use crate::header::ColorFormat;
+
 /// Perform a Discrete Cosine Transform on the input matrix.
 pub fn dct(input: &[u8], width: usize, height: usize) -> Vec<f32> {
     if input.len() != width * height {
@@ -133,7 +135,10 @@ pub fn dequantize(input: &[i16], quant_matrix: [u16; 64]) -> Vec<f32> {
     input.iter().zip(quant_matrix).map(|(v, q)| (*v as i16 * q as i16) as f32).collect()
 }
 
-pub fn dct_compress(input: &[u8], width: u32, height: u32, quality: u32) -> (Vec<Vec<i16>>, usize, usize) {
+/// Take in an image encoded in some [`ColorFormat`] and perform DCT on it,
+/// returning the modified data. This function also pads the image dimensions
+/// to a multiple of 8, which must be reversed when decoding.
+pub fn dct_compress(input: &[u8], width: u32, height: u32, parameters: DctParameters) -> DctImage {
     let new_width = width as usize + (8 - width % 8) as usize;
     let new_height = height as usize + (8 - height % 8) as usize;
     let mut img_2d: Vec<Vec<u8>> = input.windows(width as usize).step_by(width as usize).map(|r| r.to_vec()).collect();
@@ -141,23 +146,65 @@ pub fn dct_compress(input: &[u8], width: u32, height: u32, quality: u32) -> (Vec
     img_2d.resize(new_height, vec![0u8; new_width]);
 
     let mut dct_image = Vec::new();
-    for h in 0..new_height / 8 {
-        for w in 0..new_width / 8 {
-            let mut chunk = Vec::new();
-            for i in 0..8 {
-                let row = &img_2d[(h * 8) + i][w * 8..(w * 8) + 8];
-                chunk.extend_from_slice(&row);
+    for _ in 0..1 {
+        let mut dct_channel = Vec::new();
+        for h in 0..new_height / 8 {
+            for w in 0..new_width / 8 {
+                let mut chunk = Vec::new();
+                for i in 0..8 {
+                    let row = &img_2d[(h * 8) + i][w * 8..(w * 8) + 8];
+                    chunk.extend_from_slice(&row);
+                }
+
+                // Perform the DCT on the image section
+                let dct: Vec<f32> = dct(&chunk, 8, 8);
+                let quantzied_dct = quantize(&dct, quantization_matrix(parameters.quality));
+
+                dct_channel.extend_from_slice(&quantzied_dct);
             }
-
-            // Perform the DCT on the image section
-            let dct: Vec<f32> = dct(&chunk, 8, 8);
-            let quantzied_dct = quantize(&dct, quantization_matrix(quality));
-
-            dct_image.push(quantzied_dct);
         }
+        dct_image.push(dct_channel);
     }
 
-    (dct_image, new_width, new_height)
+    DctImage {
+        channels: dct_image,
+        width: new_width as u32,
+        height: new_height as u32
+    }
+}
+
+/// Parameters to pass to the [`dct_compress`] function.
+pub struct DctParameters {
+    /// A quality level from 1-100. Higher values provide better results.
+    /// Default value is 80.
+    pub quality: u32,
+
+    /// The color format of the input bytes.
+    ///
+    /// Since DCT can only process one channel at a time, knowing the format
+    /// is important.
+    pub format: ColorFormat,
+}
+
+impl Default for DctParameters {
+    fn default() -> Self {
+        Self {
+            quality: 80,
+            format: ColorFormat::Rgba32
+        }
+    }
+}
+
+/// The results of DCT compression
+pub struct DctImage {
+    /// The DCT encoded version of each channel.
+    pub channels: Vec<Vec<i16>>,
+
+    /// New width after padding.
+    pub width: u32,
+
+    /// New height after padding.
+    pub height: u32,
 }
 
 #[cfg(test)]

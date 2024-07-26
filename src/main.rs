@@ -7,33 +7,39 @@ mod header;
 mod operations;
 pub mod picture;
 
+use header::ColorFormat;
 use picture::DangoPicture;
 use std::{
     fs::File,
     io::{BufReader, BufWriter, Write},
     time::Instant,
 };
-use compression::{dct::{dct, dct_compress, dequantize, idct, quantization_matrix, quantize}, lossless};
+use compression::{dct::{dct, dct_compress, dequantize, idct, quantization_matrix, quantize, DctParameters}, lossless};
 
-use image::{ColorType, DynamicImage, GenericImage, GrayImage, Luma, Rgba};
+use image::{GenericImage, GrayImage, Luma};
 
 fn main() {
-    let input = image::open("transparent.png").unwrap().to_luma8();
+    let input = image::open("test_input.png").unwrap().to_luma8();
     input.save("original.png").unwrap();
 
-    let (dct_image, new_width, new_height) = dct_compress(input.as_raw(), input.width(), input.height(), 100);
-    let compressed_dct = lossless::compress(&dct_image.iter().flatten().flat_map(|b| b.to_le_bytes()).collect::<Vec<u8>>());
-    let mut dct_save = File::create("dct_raw.dct").unwrap();
-    dct_save.write_all(&compressed_dct.0).unwrap();
+    let dct_result = dct_compress(
+        input.as_raw(),
+        input.width(),
+        input.height(),
+        DctParameters {
+            quality: 100,
+            format: ColorFormat::Rgba32,
+        }
+    );
 
-    let mut decoded_image = GrayImage::new(new_width as u32, new_height as u32);
-    for (i, chunk) in dct_image.iter().enumerate() {
+    let mut decoded_image = GrayImage::new(dct_result.width, dct_result.height);
+    for (i, chunk) in dct_result.channels[0].windows(64).step_by(64).enumerate() {
         let dequantized_dct = dequantize(chunk, quantization_matrix(100));
         let original = idct(&dequantized_dct, 8, 8);
 
         // Write rows of blocks
-        let start_x = (i * 8) % (new_width as usize);
-        let start_y = ((i * 8) / new_width as usize) * 8;
+        let start_x = (i * 8) % dct_result.width as usize;
+        let start_y = ((i * 8) / dct_result.width as usize) * 8;
 
         let mut sub = decoded_image.sub_image(start_x as u32, start_y as u32, 8, 8);
         for y in 0..8 {
@@ -42,6 +48,8 @@ fn main() {
                 sub.put_pixel(x, y, Luma([value]))
             }
         }
+
+        decoded_image.save(format!("test.png")).unwrap();
     }
     decoded_image.save(format!("test.png")).unwrap();
 

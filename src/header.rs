@@ -39,3 +39,35 @@ pub enum ColorFormat {
     /// RGB, 8 bits per channel
     Rgb24,
 }
+
+impl ColorFormat {
+    /// Bits per color channel.
+    ///
+    /// Ex. Rgba32 has `8bpc`
+    pub fn bpc(&self) -> u8 {
+        match self {
+            ColorFormat::Rgba32 => 8,
+            ColorFormat::Rgb24 => 8,
+        }
+    }
+
+    /// Bits per pixel.
+    ///
+    /// Ex. Rgba32 has `32bpp`
+    pub fn bpp(&self) -> u16 {
+        match self {
+            ColorFormat::Rgba32 => 32,
+            ColorFormat::Rgb24 => 24,
+        }
+    }
+
+    /// Number of color channels.
+    ///
+    /// Ex. Rgba32 has `4` channels
+    pub fn channels(self) -> u16 {
+        match self {
+            ColorFormat::Rgba32 => 4,
+            ColorFormat::Rgb24 => 3,
+        }
+    }
+}
