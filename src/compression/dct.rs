@@ -141,12 +141,21 @@ pub fn dequantize(input: &[i16], quant_matrix: [u16; 64]) -> Vec<f32> {
 pub fn dct_compress(input: &[u8], width: u32, height: u32, parameters: DctParameters) -> DctImage {
     let new_width = width as usize + (8 - width % 8) as usize;
     let new_height = height as usize + (8 - height % 8) as usize;
-    let mut img_2d: Vec<Vec<u8>> = input.windows(width as usize).step_by(width as usize).map(|r| r.to_vec()).collect();
-    img_2d.iter_mut().for_each(|r| r.resize(new_width, 0));
-    img_2d.resize(new_height, vec![0u8; new_width]);
 
     let mut dct_image = Vec::new();
-    for _ in 0..1 {
+    dbg!(input.len());
+    for ch in 0..parameters.format.channels() {
+        let channel: Vec<u8> = input.iter()
+            .skip(ch as usize)
+            .step_by(parameters.format.channels() as usize)
+            .copied()
+            .collect();
+        dbg!(channel.len());
+
+        let mut img_2d: Vec<Vec<u8>> = channel.windows(width as usize).step_by(width as usize).map(|r| r.to_vec()).collect();
+        img_2d.iter_mut().for_each(|r| r.resize(new_width, 0));
+        img_2d.resize(new_height, vec![0u8; new_width]);
+
         let mut dct_channel = Vec::new();
         for h in 0..new_height / 8 {
             for w in 0..new_width / 8 {
@@ -174,6 +183,7 @@ pub fn dct_compress(input: &[u8], width: u32, height: u32, parameters: DctParame
 }
 
 /// Parameters to pass to the [`dct_compress`] function.
+#[derive(Debug, Clone, Copy)]
 pub struct DctParameters {
     /// A quality level from 1-100. Higher values provide better results.
     /// Default value is 80.

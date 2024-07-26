@@ -1,5 +1,3 @@
-use image::{DynamicImage, GrayImage};
-
 pub fn line_diff(width: u32, height: u32, data: &[u8]) -> Vec<u8> {
     let mut output_buf = Vec::with_capacity((width * height * 4) as usize);
 

@@ -8,18 +8,12 @@ mod operations;
 pub mod picture;
 
 use header::ColorFormat;
-use picture::DangoPicture;
-use std::{
-    fs::File,
-    io::{BufReader, BufWriter, Write},
-    time::Instant,
-};
-use compression::{dct::{dct, dct_compress, dequantize, idct, quantization_matrix, quantize, DctParameters}, lossless};
+use compression::dct::{dct_compress, dequantize, idct, quantization_matrix, DctParameters};
 
-use image::{GenericImage, GrayImage, Luma};
+use image::{GenericImage, GrayImage, Luma, RgbaImage};
 
 fn main() {
-    let input = image::open("test_input.png").unwrap().to_luma8();
+    let input = image::open("shit.png").unwrap().to_rgba8();
     input.save("original.png").unwrap();
 
     let dct_result = dct_compress(
@@ -27,31 +21,38 @@ fn main() {
         input.width(),
         input.height(),
         DctParameters {
-            quality: 100,
+            quality: 30,
             format: ColorFormat::Rgba32,
         }
     );
 
-    let mut decoded_image = GrayImage::new(dct_result.width, dct_result.height);
-    for (i, chunk) in dct_result.channels[0].windows(64).step_by(64).enumerate() {
-        let dequantized_dct = dequantize(chunk, quantization_matrix(100));
-        let original = idct(&dequantized_dct, 8, 8);
+    let mut final_img = vec![0u8; (dct_result.width as usize * dct_result.height as usize) * 4];
+    for (chan_num, channel) in dct_result.channels.iter().enumerate() {
+        let mut decoded_image = GrayImage::new(dct_result.width, dct_result.height);
+        for (i, chunk) in channel.windows(64).step_by(64).enumerate() {
+            let dequantized_dct = dequantize(chunk, quantization_matrix(30));
+            let original = idct(&dequantized_dct, 8, 8);
 
-        // Write rows of blocks
-        let start_x = (i * 8) % dct_result.width as usize;
-        let start_y = ((i * 8) / dct_result.width as usize) * 8;
+            // Write rows of blocks
+            let start_x = (i * 8) % dct_result.width as usize;
+            let start_y = ((i * 8) / dct_result.width as usize) * 8;
 
-        let mut sub = decoded_image.sub_image(start_x as u32, start_y as u32, 8, 8);
-        for y in 0..8 {
-            for x in 0..8 {
-                let value = original[(y as usize * 8) + x as usize];
-                sub.put_pixel(x, y, Luma([value]))
+            let mut sub = decoded_image.sub_image(start_x as u32, start_y as u32, 8, 8);
+            for y in 0..8 {
+                for x in 0..8 {
+                    let value = original[(y as usize * 8) + x as usize];
+                    sub.put_pixel(x, y, Luma([value]))
+                }
             }
         }
-
-        decoded_image.save(format!("test.png")).unwrap();
+        final_img.iter_mut().skip(chan_num).step_by(4).zip(decoded_image.iter()).for_each(|(c, n)| *c = *n);
+        decoded_image.save(format!("dct-{chan_num}.png")).unwrap();
     }
-    decoded_image.save(format!("test.png")).unwrap();
+    RgbaImage::from_raw(
+        dct_result.width,
+        dct_result.height,
+        final_img
+    ).unwrap().save("dct.png").unwrap();
 
     /*
     // Reverse the DCT

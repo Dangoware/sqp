@@ -32,6 +32,7 @@ impl Header {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 pub enum ColorFormat {
     /// RGBA, 8 bits per channel
     Rgba32,
