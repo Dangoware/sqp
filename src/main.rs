@@ -15,49 +15,51 @@ use std::{
 };
 use compression::dct::{dct, dequantize, idct, quantization_matrix, quantize};
 
-use image::{ColorType, DynamicImage, GenericImage, GrayImage, Rgba};
+use image::{ColorType, DynamicImage, GenericImage, GrayImage, Luma, Rgba};
 
 fn main() {
-    let input = image::open("test_input.png").unwrap().to_luma8();
+    let input = image::open("scaramouche.png").unwrap().to_luma8();
     input.save("original.png").unwrap();
 
+    let new_width = input.width() as usize + (8 - input.width() % 8) as usize;
+    let new_height = input.height() as usize + (8 - input.height() % 8) as usize;
+    let mut img_2d: Vec<Vec<u8>> = input.windows(input.width() as usize).step_by(input.width() as usize).map(|r| r.to_vec()).collect();
+    img_2d.iter_mut().for_each(|r| r.resize(new_width, 0));
+    img_2d.resize(new_height, vec![0u8; new_width]);
+
+    let timer = Instant::now();
     let mut dct_image = Vec::new();
-    for h in 0..input.height() as usize / 8 {
-        for w in 0..input.width() as usize / 8 {
+    for h in 0..new_height / 8 {
+        for w in 0..new_width / 8 {
             let mut chunk = Vec::new();
             for i in 0..8 {
-                let start = (w * 8) + (h * 8) + (i * input.width() as usize);
-                let row = &input.as_raw()[start..start + 8];
+                let row = &img_2d[(h * 8) + i][w * 8..(w * 8) + 8];
                 chunk.extend_from_slice(&row);
-            }
-
-            if h + w == 0 {
-                println!("{:?}", chunk);
             }
 
             // Perform the DCT on the image section
             let dct: Vec<f32> = dct(&chunk, 8, 8);
-            let quantzied_dct = quantize(&dct, quantization_matrix(50));
+            let quantzied_dct = quantize(&dct, quantization_matrix(80));
 
             dct_image.push(quantzied_dct);
         }
     }
+    println!("Encoding took {}ms", timer.elapsed().as_millis());
 
-    let mut decoded_image = DynamicImage::new(input.width(), input.height(), ColorType::L8);
+    let mut decoded_image = GrayImage::new(new_width as u32, new_height as u32);
     for (i, chunk) in dct_image.iter().enumerate() {
-        let dequantized_dct = dequantize(chunk, quantization_matrix(50));
+        let dequantized_dct = dequantize(chunk, quantization_matrix(80));
         let original = idct(&dequantized_dct, 8, 8);
 
         // Write rows of blocks
-        let start_x = (i * 8) % (input.width() as usize - 2);
-        let start_y = (i * 8) / input.width() as usize * 8;
-        dbg!(start_x);
-        dbg!(start_y);
+        let start_x = (i * 8) % (new_width as usize);
+        let start_y = ((i * 8) / new_width as usize) * 8;
+
         let mut sub = decoded_image.sub_image(start_x as u32, start_y as u32, 8, 8);
         for y in 0..8 {
             for x in 0..8 {
                 let value = original[(y as usize * 8) + x as usize];
-                sub.put_pixel(x, y, Rgba([value, value, value, 255]))
+                sub.put_pixel(x, y, Luma([value]))
             }
         }
     }
