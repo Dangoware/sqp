@@ -1,3 +1,7 @@
+<p align="center">
+  <img width="400px" src="https://github.com/user-attachments/assets/a20467f1-7831-4fa4-8d2c-39f1fe749e57">
+</p>
+
 # dpf
 **dpf** (dangoware picture format) is a simple image format designed 
 for ease of encoding and decoding while maintaining a relatively good 
