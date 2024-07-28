@@ -1,11 +1,11 @@
-use std::io::{Read, Write};
+use std::io::{self, Read, Write};
 
-use byteorder::{ReadBytesExt, WriteBytesExt, LE};
+use byteorder::{ReadBytesExt, WriteBytesExt};
 use thiserror::Error;
 
 use crate::{
-    compression::lossless::{compress, decompress, ChunkInfo, CompressionInfo},
-    header::Header,
+    compression::{dct::{dct_compress, DctParameters}, lossless::{compress, decompress, CompressionError, CompressionInfo}},
+    header::{ColorFormat, CompressionType, Header},
     operations::{diff_line, line_diff},
 };
 
@@ -14,29 +14,73 @@ pub struct DangoPicture {
     pub bitmap: Vec<u8>,
 }
 
+#[derive(Error, Debug)]
+pub enum Error {
+    #[error("incorrect identifier, got {0:?}")]
+    InvalidIdentifier([u8; 8]),
+
+    #[error("io operation failed: {0}")]
+    IoError(#[from] io::Error),
+
+    #[error("compression operation failed: {0}")]
+    CompressionError(#[from] CompressionError),
+}
+
 impl DangoPicture {
-    /// Encode the image into anything that implements [Write]
-    pub fn encode<O: Write + WriteBytesExt>(&self, mut output: O) {
+    pub fn from_raw(
+        width: u32,
+        height: u32,
+        color_format: ColorFormat,
+        compression_type: CompressionType,
+        bitmap: Vec<u8>,
+    ) -> Self {
         let header = Header {
-            width: self.header.width,
-            height: self.header.height,
+            width,
+            height,
+
+            compression_type,
+            color_format,
 
             ..Default::default()
         };
 
-        // Write out the header
-        output.write_all(&header.to_bytes()).unwrap();
+        DangoPicture {
+            header,
+            bitmap,
+        }
+    }
 
-        let modified_data = diff_line(header.width, header.height, &self.bitmap);
+    /// Encode the image into anything that implements [Write]
+    pub fn encode<O: Write + WriteBytesExt>(&self, mut output: O) -> Result<(), Error> {
+        // Write out the header
+        output.write_all(&self.header.to_bytes()).unwrap();
+
+        let modified_data = match self.header.compression_type {
+            CompressionType::None => &self.bitmap,
+            CompressionType::Lossless => &diff_line(self.header.width, self.header.height, &self.bitmap),
+            CompressionType::LossyDct => {
+                &dct_compress(
+                    &self.bitmap,
+                    DctParameters {
+                        quality: self.header.compression_level as u32,
+                        format: self.header.color_format,
+                        width: self.header.width as usize,
+                        height: self.header.height as usize,
+                    }
+                ).concat().iter().flat_map(|i| i.to_le_bytes()).collect()
+            },
+        };
 
         // Compress the image data
-        let (compressed_data, compression_info) = compress(&modified_data);
+        let (compressed_data, compression_info) = compress(&modified_data)?;
 
         // Write out compression info
         compression_info.write_into(&mut output).unwrap();
 
         // Write out compressed data
         output.write_all(&compressed_data).unwrap();
+
+        Ok(())
     }
 
     /// Decode the image from anything that implements [Read]
@@ -48,23 +92,9 @@ impl DangoPicture {
             return Err(Error::InvalidIdentifier(magic));
         }
 
-        let header = Header {
-            magic,
-            width: input.read_u32::<LE>().unwrap(),
-            height: input.read_u32::<LE>().unwrap(),
-        };
+        let header = Header::read_from(&mut input)?;
 
-        let mut compression_info = CompressionInfo {
-            chunk_count: input.read_u32::<LE>().unwrap() as usize,
-            chunks: Vec::new(),
-        };
-
-        for _ in 0..compression_info.chunk_count {
-            compression_info.chunks.push(ChunkInfo {
-                size_compressed: input.read_u32::<LE>().unwrap() as usize,
-                size_raw: input.read_u32::<LE>().unwrap() as usize,
-            });
-        }
+        let compression_info = CompressionInfo::read_from(&mut input);
 
         let preprocessed_bitmap = decompress(&mut input, &compression_info);
 
@@ -72,24 +102,4 @@ impl DangoPicture {
 
         Ok(DangoPicture { header, bitmap })
     }
-
-    pub fn from_raw(width: u32, height: u32, bitmap: &[u8]) -> Self {
-        let header = Header {
-            width,
-            height,
-
-            ..Default::default()
-        };
-
-        DangoPicture {
-            header,
-            bitmap: bitmap.into(),
-        }
-    }
-}
-
-#[derive(Error, Debug)]
-pub enum Error {
-    #[error("incorrect identifier, got {}", 0)]
-    InvalidIdentifier([u8; 8]),
 }

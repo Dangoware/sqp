@@ -43,10 +43,26 @@ impl CompressionInfo {
 
         Ok(())
     }
+
+    pub fn read_from<T: Read + ReadBytesExt>(input: &mut T) -> Self {
+        let mut compression_info = CompressionInfo {
+            chunk_count: input.read_u32::<LE>().unwrap() as usize,
+            chunks: Vec::new(),
+        };
+
+        for _ in 0..compression_info.chunk_count {
+            compression_info.chunks.push(ChunkInfo {
+                size_compressed: input.read_u32::<LE>().unwrap() as usize,
+                size_raw: input.read_u32::<LE>().unwrap() as usize,
+            });
+        }
+
+        compression_info
+    }
 }
 
 #[derive(Debug, Error)]
-enum CompressionError {
+pub enum CompressionError {
     #[error("bad compressed element \"{1}\" at byte {2}")]
     BadElement(Vec<u8>, u64, usize),
 
@@ -54,7 +70,7 @@ enum CompressionError {
     NoChunks,
 }
 
-pub fn compress(data: &[u8]) -> (Vec<u8>, CompressionInfo) {
+pub fn compress(data: &[u8]) -> Result<(Vec<u8>, CompressionInfo), CompressionError> {
     let mut part_data;
 
     let mut offset = 0;
@@ -84,18 +100,15 @@ pub fn compress(data: &[u8]) -> (Vec<u8>, CompressionInfo) {
     }
 
     if output_info.chunk_count == 0 {
-        panic!("No chunks compressed!")
+        return Err(CompressionError::NoChunks)
     }
 
-    (output_buf, output_info)
+    Ok((output_buf, output_info))
 }
 
 fn compress_lzw(data: &[u8], last: Vec<u8>) -> (usize, Vec<u8>, Vec<u8>) {
     let mut count = 0;
-    let mut dictionary = HashMap::new();
-    for i in 0..=255 {
-        dictionary.insert(vec![i], i as u64);
-    }
+    let mut dictionary: HashMap<Vec<u8>, u64> = HashMap::from_iter((0..=255).into_iter().map(|i| (vec![i], i as u64)));
     let mut dictionary_count = (dictionary.len() + 1) as u64;
 
     let mut element = Vec::new();

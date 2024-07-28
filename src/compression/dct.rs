@@ -1,6 +1,6 @@
 use std::{f32::consts::{PI, SQRT_2}, sync::{Arc, Mutex}};
 
-use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
+use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator};
 
 use crate::header::ColorFormat;
 
@@ -20,7 +20,6 @@ pub fn dct(input: &[u8], width: usize, height: usize) -> Vec<f32> {
     for u in 0..width {
         for v in 0..height {
 
-            // according to the formula of DCT
             let cu = if u == 0 {
                 sqrt_width_zero
             } else {
@@ -33,7 +32,6 @@ pub fn dct(input: &[u8], width: usize, height: usize) -> Vec<f32> {
                 sqrt_height
             };
 
-            // calculate DCT
             let mut tmp_sum = 0.0;
             for x in 0..width {
                 for y in 0..height {
@@ -140,7 +138,7 @@ pub fn dequantize(input: &[i16], quant_matrix: [u16; 64]) -> Vec<f32> {
 /// Take in an image encoded in some [`ColorFormat`] and perform DCT on it,
 /// returning the modified data. This function also pads the image dimensions
 /// to a multiple of 8, which must be reversed when decoding.
-pub fn dct_compress(input: &[u8], parameters: DctParameters) -> DctImage {
+pub fn dct_compress(input: &[u8], parameters: DctParameters) -> Vec<Vec<i16>> {
     let new_width = parameters.width + (8 - parameters.width % 8);
     let new_height = parameters.height + (8 - parameters.width % 8);
     let quantization_matrix = quantization_matrix(parameters.quality);
@@ -160,20 +158,21 @@ pub fn dct_compress(input: &[u8], parameters: DctParameters) -> DctImage {
         img_2d.resize(new_height, vec![0u8; new_width]);
 
         let mut dct_channel = Vec::new();
-        for h in 0..new_height / 8 {
-            for w in 0..new_width / 8 {
-                let mut chunk = Vec::new();
-                for i in 0..8 {
-                    let row = &img_2d[(h * 8) + i][w * 8..(w * 8) + 8];
-                    chunk.extend_from_slice(&row);
-                }
+        for x in 0..((new_height / 8) * (new_width / 8)) {
+            let h = x / (new_width / 8);
+            let w = x % (new_width / 8);
 
-                // Perform the DCT on the image section
-                let dct: Vec<f32> = dct(&chunk, 8, 8);
-                let quantized_dct = quantize(&dct, quantization_matrix);
-
-                dct_channel.extend_from_slice(&quantized_dct);
+            let mut chunk = Vec::new();
+            for i in 0..8 {
+                let row = &img_2d[(h * 8) + i][w * 8..(w * 8) + 8];
+                chunk.extend_from_slice(&row);
             }
+
+            // Perform the DCT on the image section
+            let dct: Vec<f32> = dct(&chunk, 8, 8);
+            let quantized_dct = quantize(&dct, quantization_matrix);
+
+            dct_channel.extend_from_slice(&quantized_dct);
         }
 
         dct_channel
@@ -181,52 +180,55 @@ pub fn dct_compress(input: &[u8], parameters: DctParameters) -> DctImage {
 
     channels.into_iter().for_each(|c| dct_image.push(c));
 
-    DctImage {
-        channels: dct_image,
-        width: new_width as u32,
-        height: new_height as u32
-    }
+    dct_image
 }
 
-/// Take in
+/// Take in an image encoded with DCT and quantized and perform IDCT on it,
+/// returning an approximation of the original data.
 pub fn dct_decompress(input: &[Vec<i16>], parameters: DctParameters) -> Vec<u8> {
+    let new_width = parameters.width + (8 - parameters.width % 8);
+    let new_height = parameters.height + (8 - parameters.width % 8);
+
     // Precalculate the quantization matrix
     let quantization_matrix = quantization_matrix(parameters.quality);
 
-    // Number of bytes per row of chunks
-    let chunk_row = parameters.width * 8;
+    let final_img = Arc::new(Mutex::new(vec![0u8; (new_width * new_height) * parameters.format.channels() as usize]));
 
-    let final_img = Arc::new(Mutex::new(vec![0u8; (parameters.width * parameters.height) * 4]));
     input.par_iter().enumerate().for_each(|(chan_num, channel)| {
         println!("Decoding channel {chan_num}");
 
-        let mut decoded_image = vec![];
-        for (i, chunk) in channel.windows(64).step_by(64).enumerate() {
-
-            // Allocate a new row of the image for every new row of chunks
-            if i % (parameters.width / 8) == 0 {
-                decoded_image.extend_from_slice(&vec![0u8; chunk_row]);
-            }
-
-            let dequantized_dct = dequantize(chunk, quantization_matrix);
+        let decoded_image = Arc::new(Mutex::new(vec![0u8; parameters.width * parameters.height]));
+        channel.into_par_iter().copied().chunks(64).enumerate().for_each(|(i, chunk)| {
+            let dequantized_dct = dequantize(&chunk, quantization_matrix);
             let original = idct(&dequantized_dct, 8, 8);
 
             // Write rows of blocks
-            let start_x = (i * 8) % parameters.width;
-            let start_y = ((i * 8) / parameters.width) * 8;
+            let start_x = (i * 8) % new_width;
+            let start_y = ((i * 8) / new_width) * 8;
             let start = start_x + (start_y * parameters.width);
 
             for row_num in 0..8 {
-                let row_offset = row_num * parameters.width;
-                let row_data = &original[row_num * 8..(row_num * 8) + 8];
-                decoded_image[start + row_offset..start + row_offset + 8].copy_from_slice(row_data);
-            }
-        }
+                if start_y + row_num >= parameters.height {
+                    break;
+                }
 
-        final_img.lock().unwrap().iter_mut()
+                let row_offset = row_num * parameters.width;
+
+                let offset = if start_x + 8 >= parameters.width {
+                    parameters.width % 8
+                } else {
+                    8
+                };
+
+                let row_data = &original[row_num * 8..(row_num * 8) + offset];
+                decoded_image.lock().unwrap()[start + row_offset..start + row_offset + offset].copy_from_slice(row_data);
+            }
+        });
+
+        final_img.lock().unwrap().par_iter_mut()
             .skip(chan_num)
-            .step_by(4)
-            .zip(decoded_image.iter())
+            .step_by(parameters.format.channels() as usize)
+            .zip(decoded_image.lock().unwrap().par_iter())
             .for_each(|(c, n)| *c = *n);
     });
 

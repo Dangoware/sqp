@@ -12,47 +12,42 @@ use std::{fs::File, io::Write, time::Instant};
 use header::ColorFormat;
 use compression::{dct::{dct_compress, dct_decompress, DctParameters}, lossless};
 
-use image::RgbaImage;
-use picture::DangoPicture;
-
 fn main() {
-    let input = image::open("kirara_motorbike.jpg").unwrap().to_rgba8();
+    let input = image::open("transparent2.png").unwrap().to_rgba8();
     input.save("original.png").unwrap();
-
-    let dct_output = File::create("test.dpf").unwrap();
-    DangoPicture::from_raw(input.width(), input.height(), &input.as_raw().clone()).encode(&dct_output);
 
     let timer = Instant::now();
     let dct_result = dct_compress(
         input.as_raw(),
         DctParameters {
-            quality: 30,
+            quality: 68,
             format: ColorFormat::Rgba32,
             width: input.width() as usize,
             height: input.height() as usize,
         }
     );
+
+    let compressed_dct = lossless::compress(&dct_result.concat().iter().flat_map(|x| x.to_le_bytes()).collect::<Vec<u8>>()).unwrap();
     println!("Encoding took {}ms", timer.elapsed().as_millis());
 
     let mut dct_output = File::create("test-dct.dpf").unwrap();
-    let compressed_dct = lossless::compress(&dct_result.channels.concat().iter().flat_map(|x| x.to_le_bytes()).collect::<Vec<u8>>());
     dct_output.write_all(&compressed_dct.0).unwrap();
 
     let timer = Instant::now();
     let decoded_dct = dct_decompress(
-        &dct_result.channels,
+        &dct_result,
         DctParameters {
-            quality: 30,
+            quality: 68,
             format: ColorFormat::Rgba32,
-            width: dct_result.width as usize,
-            height: dct_result.height as usize
+            width: input.width() as usize,
+            height: input.height() as usize
         }
     );
     println!("Decoding took {}ms", timer.elapsed().as_millis());
 
-    RgbaImage::from_raw(
-        dct_result.width,
-        dct_result.height,
+    image::RgbaImage::from_raw(
+        input.width(),
+        input.height(),
         decoded_dct
     ).unwrap().save("dct-final.png").unwrap();
 
