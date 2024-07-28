@@ -1,13 +1,13 @@
 use std::{f32::consts::{PI, SQRT_2}, sync::{Arc, Mutex}};
 
-use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator};
+use rayon::prelude::*;
 
 use crate::header::ColorFormat;
 
 /// Perform a Discrete Cosine Transform on the input matrix.
 pub fn dct(input: &[u8], width: usize, height: usize) -> Vec<f32> {
     if input.len() != width * height {
-        panic!("Input matrix size must be width×height")
+        panic!("Input matrix size must be width * height, got {}", input.len())
     }
 
     let sqrt_width_zero = 1.0 / (width as f32).sqrt();
@@ -53,7 +53,7 @@ pub fn dct(input: &[u8], width: usize, height: usize) -> Vec<f32> {
 /// Perform an inverse Discrete Cosine Transform on the input matrix.
 pub fn idct(input: &[f32], width: usize, height: usize) -> Vec<u8> {
     if input.len() != width * height {
-        panic!("Input matrix size must be width×height")
+        panic!("Input matrix size must be width * height, got {}", input.len())
     }
 
     let sqrt_width_zero = 1.0 / (width as f32).sqrt();
@@ -127,12 +127,18 @@ pub fn quantization_matrix(quality: u32) -> [u16; 64] {
 
 /// Quantize an input matrix, returning the result.
 pub fn quantize(input: &[f32], quant_matrix: [u16; 64]) -> Vec<i16> {
-    input.iter().zip(quant_matrix).map(|(v, q)| (v / q as f32).round() as i16).collect()
+    input.iter()
+        .zip(quant_matrix)
+        .map(|(v, q)| (v / q as f32).round() as i16)
+        .collect()
 }
 
 /// Dequantize an input matrix, returning an approximation of the original.
 pub fn dequantize(input: &[i16], quant_matrix: [u16; 64]) -> Vec<f32> {
-    input.iter().zip(quant_matrix).map(|(v, q)| (*v as i16 * q as i16) as f32).collect()
+    input.iter()
+        .zip(quant_matrix)
+        .map(|(v, q)| (*v as i16 * q as i16) as f32)
+        .collect()
 }
 
 /// Take in an image encoded in some [`ColorFormat`] and perform DCT on it,
@@ -140,7 +146,7 @@ pub fn dequantize(input: &[i16], quant_matrix: [u16; 64]) -> Vec<f32> {
 /// to a multiple of 8, which must be reversed when decoding.
 pub fn dct_compress(input: &[u8], parameters: DctParameters) -> Vec<Vec<i16>> {
     let new_width = parameters.width + (8 - parameters.width % 8);
-    let new_height = parameters.height + (8 - parameters.width % 8);
+    let new_height = parameters.height + (8 - parameters.height % 8);
     let quantization_matrix = quantization_matrix(parameters.quality);
 
     let mut dct_image = Vec::with_capacity(input.len());
@@ -150,7 +156,6 @@ pub fn dct_compress(input: &[u8], parameters: DctParameters) -> Vec<Vec<i16>> {
             .step_by(parameters.format.channels() as usize)
             .copied()
             .collect();
-        println!("Encoding channel {ch}");
 
         // Create 2d array of the channel for ease of processing
         let mut img_2d: Vec<Vec<u8>> = channel.windows(parameters.width).step_by(parameters.width).map(|r| r.to_vec()).collect();
@@ -185,20 +190,17 @@ pub fn dct_compress(input: &[u8], parameters: DctParameters) -> Vec<Vec<i16>> {
 
 /// Take in an image encoded with DCT and quantized and perform IDCT on it,
 /// returning an approximation of the original data.
-pub fn dct_decompress(input: &[Vec<i16>], parameters: DctParameters) -> Vec<u8> {
+pub fn dct_decompress(input: &[i16], parameters: DctParameters) -> Vec<u8> {
     let new_width = parameters.width + (8 - parameters.width % 8);
-    let new_height = parameters.height + (8 - parameters.width % 8);
+    let new_height = parameters.height + (8 - parameters.height % 8);
 
     // Precalculate the quantization matrix
     let quantization_matrix = quantization_matrix(parameters.quality);
 
     let final_img = Arc::new(Mutex::new(vec![0u8; (new_width * new_height) * parameters.format.channels() as usize]));
-
-    input.par_iter().enumerate().for_each(|(chan_num, channel)| {
-        println!("Decoding channel {chan_num}");
-
+    input.par_chunks(new_width * new_height).enumerate().for_each(|(chan_num, channel)| {
         let decoded_image = Arc::new(Mutex::new(vec![0u8; parameters.width * parameters.height]));
-        channel.into_par_iter().copied().chunks(64).enumerate().for_each(|(i, chunk)| {
+        channel.par_chunks(64).enumerate().for_each(|(i, chunk)| {
             let dequantized_dct = dequantize(&chunk, quantization_matrix);
             let original = idct(&dequantized_dct, 8, 8);
 

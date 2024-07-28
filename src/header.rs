@@ -40,15 +40,19 @@ impl Default for Header {
 }
 
 impl Header {
-    pub fn to_bytes(&self) -> [u8; 16] {
+    pub fn to_bytes(&self) -> [u8; 19] {
         let mut buf = Cursor::new(Vec::new());
 
         buf.write_all(&self.magic).unwrap();
         buf.write_u32::<LE>(self.width).unwrap();
         buf.write_u32::<LE>(self.height).unwrap();
 
-        buf.write_u8(self.compression_type as u8).unwrap();
+        // Write compression info
+        buf.write_u8(self.compression_type.into()).unwrap();
         buf.write_i8(self.compression_level).unwrap();
+
+        // Write color format
+        buf.write_u8(self.color_format as u8).unwrap();
 
         buf.into_inner().try_into().unwrap()
     }
@@ -73,6 +77,8 @@ impl Header {
     }
 }
 
+/// The format of bytes in the image.
+#[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ColorFormat {
     /// RGBA, 8 bits per channel
@@ -127,6 +133,7 @@ impl TryFrom<u8> for ColorFormat {
 }
 
 /// The type of compression used in the image
+#[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompressionType {
     /// No compression at all, raw bitmap
@@ -149,5 +156,15 @@ impl TryFrom<u8> for CompressionType {
             2 => Self::LossyDct,
             v => return Err(format!("invalid compression type {v}"))
         })
+    }
+}
+
+impl Into<u8> for CompressionType {
+    fn into(self) -> u8 {
+        match self {
+            CompressionType::None => 0,
+            CompressionType::Lossless => 1,
+            CompressionType::LossyDct => 2,
+        }
     }
 }
