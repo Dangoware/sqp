@@ -1,4 +1,6 @@
-use std::f32::consts::{PI, SQRT_2};
+use std::{f32::consts::{PI, SQRT_2}, sync::{Arc, Mutex}};
+
+use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 
 use crate::header::ColorFormat;
 
@@ -89,7 +91,7 @@ pub fn idct(input: &[f32], width: usize, height: usize) -> Vec<u8> {
                 }
             }
 
-            output.push((tmp_sum + 128.0) as u8)
+            output.push((tmp_sum + 128.0).round() as u8)
         }
     }
 
@@ -138,21 +140,22 @@ pub fn dequantize(input: &[i16], quant_matrix: [u16; 64]) -> Vec<f32> {
 /// Take in an image encoded in some [`ColorFormat`] and perform DCT on it,
 /// returning the modified data. This function also pads the image dimensions
 /// to a multiple of 8, which must be reversed when decoding.
-pub fn dct_compress(input: &[u8], width: u32, height: u32, parameters: DctParameters) -> DctImage {
-    let new_width = width as usize + (8 - width % 8) as usize;
-    let new_height = height as usize + (8 - height % 8) as usize;
+pub fn dct_compress(input: &[u8], parameters: DctParameters) -> DctImage {
+    let new_width = parameters.width + (8 - parameters.width % 8);
+    let new_height = parameters.height + (8 - parameters.width % 8);
+    let quantization_matrix = quantization_matrix(parameters.quality);
 
-    let mut dct_image = Vec::new();
-    dbg!(input.len());
-    for ch in 0..parameters.format.channels() {
+    let mut dct_image = Vec::with_capacity(input.len());
+    let channels: Vec<Vec<i16>> = (0..parameters.format.channels()).into_par_iter().map(|ch| {
         let channel: Vec<u8> = input.iter()
             .skip(ch as usize)
             .step_by(parameters.format.channels() as usize)
             .copied()
             .collect();
-        dbg!(channel.len());
+        println!("Encoding channel {ch}");
 
-        let mut img_2d: Vec<Vec<u8>> = channel.windows(width as usize).step_by(width as usize).map(|r| r.to_vec()).collect();
+        // Create 2d array of the channel for ease of processing
+        let mut img_2d: Vec<Vec<u8>> = channel.windows(parameters.width).step_by(parameters.width).map(|r| r.to_vec()).collect();
         img_2d.iter_mut().for_each(|r| r.resize(new_width, 0));
         img_2d.resize(new_height, vec![0u8; new_width]);
 
@@ -167,19 +170,67 @@ pub fn dct_compress(input: &[u8], width: u32, height: u32, parameters: DctParame
 
                 // Perform the DCT on the image section
                 let dct: Vec<f32> = dct(&chunk, 8, 8);
-                let quantzied_dct = quantize(&dct, quantization_matrix(parameters.quality));
+                let quantized_dct = quantize(&dct, quantization_matrix);
 
-                dct_channel.extend_from_slice(&quantzied_dct);
+                dct_channel.extend_from_slice(&quantized_dct);
             }
         }
-        dct_image.push(dct_channel);
-    }
+
+        dct_channel
+    }).collect();
+
+    channels.into_iter().for_each(|c| dct_image.push(c));
 
     DctImage {
         channels: dct_image,
         width: new_width as u32,
         height: new_height as u32
     }
+}
+
+/// Take in
+pub fn dct_decompress(input: &[Vec<i16>], parameters: DctParameters) -> Vec<u8> {
+    // Precalculate the quantization matrix
+    let quantization_matrix = quantization_matrix(parameters.quality);
+
+    // Number of bytes per row of chunks
+    let chunk_row = parameters.width * 8;
+
+    let final_img = Arc::new(Mutex::new(vec![0u8; (parameters.width * parameters.height) * 4]));
+    input.par_iter().enumerate().for_each(|(chan_num, channel)| {
+        println!("Decoding channel {chan_num}");
+
+        let mut decoded_image = vec![];
+        for (i, chunk) in channel.windows(64).step_by(64).enumerate() {
+
+            // Allocate a new row of the image for every new row of chunks
+            if i % (parameters.width / 8) == 0 {
+                decoded_image.extend_from_slice(&vec![0u8; chunk_row]);
+            }
+
+            let dequantized_dct = dequantize(chunk, quantization_matrix);
+            let original = idct(&dequantized_dct, 8, 8);
+
+            // Write rows of blocks
+            let start_x = (i * 8) % parameters.width;
+            let start_y = ((i * 8) / parameters.width) * 8;
+            let start = start_x + (start_y * parameters.width);
+
+            for row_num in 0..8 {
+                let row_offset = row_num * parameters.width;
+                let row_data = &original[row_num * 8..(row_num * 8) + 8];
+                decoded_image[start + row_offset..start + row_offset + 8].copy_from_slice(row_data);
+            }
+        }
+
+        final_img.lock().unwrap().iter_mut()
+            .skip(chan_num)
+            .step_by(4)
+            .zip(decoded_image.iter())
+            .for_each(|(c, n)| *c = *n);
+    });
+
+    Arc::try_unwrap(final_img).unwrap().into_inner().unwrap()
 }
 
 /// Parameters to pass to the [`dct_compress`] function.
@@ -194,13 +245,21 @@ pub struct DctParameters {
     /// Since DCT can only process one channel at a time, knowing the format
     /// is important.
     pub format: ColorFormat,
+
+    /// Width of the input image
+    pub width: usize,
+
+    /// Height of the input image
+    pub height: usize,
 }
 
 impl Default for DctParameters {
     fn default() -> Self {
         Self {
             quality: 80,
-            format: ColorFormat::Rgba32
+            format: ColorFormat::Rgba32,
+            width: 0,
+            height: 0,
         }
     }
 }
@@ -222,7 +281,53 @@ mod tests {
     use super::*;
 
     #[test]
-    fn quantization_matrix_q80() {
+    fn run_dct() {
+        let result = dct(
+            &[
+                6, 4, 4, 6, 10, 16, 20, 24,
+                5, 5, 6, 8, 10, 23, 24, 22,
+                6, 5, 6, 10, 16, 23, 28, 22,
+                6, 7, 9, 12, 20, 35, 32, 25,
+                7, 9, 15, 22, 27, 44, 41, 31,
+                10, 14, 22, 26, 32, 42, 45, 37,
+                20, 26, 31, 35, 41, 48, 48, 40,
+                29, 37, 38, 39, 45, 40, 41, 40
+            ],
+            8,
+            8
+        );
+
+        assert_eq!(
+            result,
+            [-839.37494, -66.86765, -5.8187184, 12.086508, -12.37503, 3.744713, 0.65127736, -1.4721011, -78.0333, -0.8744621, 14.815389, 1.9330482, 2.5059338, 1.8356638, 2.3859768, -2.1098928, 12.556393, 17.50461, 3.9685955, -8.910822, 6.42554, -4.6883383, -2.441934, 2.3615432, -1.4457717, -11.20282, -0.6175499, -0.24921608, -1.3332539, 2.59305, 2.0981073, -1.1885407, 0.6249629, 4.1257324, 0.21936417, 0.5029774, 1.625, -2.7071304, 0.8562317, -0.67780924, -0.47140676, -1.1953268, 0.7938299, 1.343049, 0.4363842, -0.75078535, -0.3206334, 1.0701582, -3.9833553, 2.071165, 1.5580511, -2.9571223, 3.426909, -0.45216227, -2.2185893, 3.0024266, 2.9214313, -0.85989547, -1.5205104, 0.891371, 0.9026685, 1.3169396, -1.0526512, -0.12552339]
+        );
+    }
+
+    #[test]
+    fn run_idct() {
+        let result = idct(
+            &[-839.37494, -66.86765, -5.8187184, 12.086508, -12.37503, 3.744713, 0.65127736, -1.4721011, -78.0333, -0.8744621, 14.815389, 1.9330482, 2.5059338, 1.8356638, 2.3859768, -2.1098928, 12.556393, 17.50461, 3.9685955, -8.910822, 6.42554, -4.6883383, -2.441934, 2.3615432, -1.4457717, -11.20282, -0.6175499, -0.24921608, -1.3332539, 2.59305, 2.0981073, -1.1885407, 0.6249629, 4.1257324, 0.21936417, 0.5029774, 1.625, -2.7071304, 0.8562317, -0.67780924, -0.47140676, -1.1953268, 0.7938299, 1.343049, 0.4363842, -0.75078535, -0.3206334, 1.0701582, -3.9833553, 2.071165, 1.5580511, -2.9571223, 3.426909, -0.45216227, -2.2185893, 3.0024266, 2.9214313, -0.85989547, -1.5205104, 0.891371, 0.9026685, 1.3169396, -1.0526512, -0.12552339],
+            8,
+            8
+        );
+
+        assert_eq!(
+            result,
+            [
+                6, 4, 4, 6, 10, 16, 20, 24,
+                5, 5, 6, 8, 10, 23, 24, 22,
+                6, 5, 6, 10, 16, 23, 28, 22,
+                6, 7, 9, 12, 20, 35, 32, 25,
+                7, 9, 15, 22, 27, 44, 41, 31,
+                10, 14, 22, 26, 32, 42, 45, 37,
+                20, 26, 31, 35, 41, 48, 48, 40,
+                29, 37, 38, 39, 45, 40, 41, 40
+            ]
+        );
+    }
+
+    #[test]
+    fn create_quantization_matrix_q80() {
         let result = quantization_matrix(80);
 
         assert_eq!(
@@ -241,7 +346,7 @@ mod tests {
     }
 
     #[test]
-    fn quantization_matrix_q100() {
+    fn create_quantization_matrix_q100() {
         let result = quantization_matrix(100);
 
         assert_eq!(
