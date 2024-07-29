@@ -15,3 +15,10 @@ byteorder = "1.5"
 integer-encoding = "4.0"
 rayon = "1.10"
 thiserror = "1.0"
+
+[profile.production]
+inherits = "release"
+lto = true
+strip = true
+codegen-units = 1
+panic = "abort"
