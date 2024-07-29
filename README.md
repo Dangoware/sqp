@@ -3,14 +3,21 @@
 </p>
 
 # SQP
-**SQP** (Squishy Picture) is a simple image format designed 
-for ease of encoding and decoding while maintaining a relatively good 
-compression ratio for various purposes. The general idea is to make
-something "good enough" while being simple.
+**SQP** (**SQ**uishy **P**icture Format) is an image format designed 
+for ease of implementation while maintaining a relatively good 
+compression ratio. The general idea is to make something "good enough" 
+while being simple, and also as a learning tool to learn about 
+compression (mostly on my part). If you need an image format for general
+use, this is probably **not it**, go check out JPEG XL or AVIF.
 
-This reference implementation fits in under 1000 lines of relatively 
+This reference implementation fits in around 1000 lines of relatively 
 simple Rust, while maintaining decent compression and decompression
 speeds.
 
-Additionally, it also supports both lossless and lossy encoding schemes,
-with the lossy version using Discrete Cosine Transform encoding like JPEG.
+## Features
+- Lossless and lossy compression schemes
+- Support for various color formats (RGBA8, GrayAlpha8, etc.)
+- Decent compression ratios, the lossless compression can often beat PNG
+  especially on images with transparency
+- Relatively simple
+- Squishy
