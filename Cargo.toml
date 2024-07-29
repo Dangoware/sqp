@@ -3,12 +3,15 @@ name = "sqp"
 description = """
 The squishiest image format!
 """
-license = "MIT"
+repository = "https://github.com/Dangoware/sqp"
+license = "MIT OR Apache-2.0"
+authors = ["G2 <ke0bhogsg@gmail.com>"]
 version = "0.1.0"
 edition = "2021"
+categories = ["encoding", "compression", "graphics", "multimedia::images", "multimedia::encoding"]
 
 [dependencies]
-byteorder = "1.5.0"
-integer-encoding = "4.0.0"
-rayon = "1.10.0"
-thiserror = "1.0.63"
+byteorder = "1.5"
+integer-encoding = "4.0"
+rayon = "1.10"
+thiserror = "1.0"

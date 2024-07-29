@@ -34,8 +34,8 @@ impl DangoPicture {
     /// The quality parameter does nothing if the compression type is not
     /// lossy, so it should be set to None.
     ///
-    /// ## Example
-    /// ```
+    /// # Example
+    /// ```ignore
     /// let dpf_lossy = DangoPicture::from_raw(
     ///     input.width(),
     ///     input.height(),
