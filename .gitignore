@@ -5,6 +5,7 @@ Cargo.lock
 # Ignore images
 *.png
 *.dpf
+*.sqp
 *.raw
 *.rgba
 *.jpg

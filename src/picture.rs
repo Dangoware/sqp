@@ -1,4 +1,6 @@
-use std::{fs::File, io::{self, BufWriter, Read, Write}};
+//! Functions and other utilities surrounding the [`SquishyPicture`] type.
+
+use std::{fs::File, io::{self, BufWriter, Read, Write}, path::Path};
 
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use integer_encoding::VarInt;
@@ -10,11 +12,6 @@ use crate::{
     header::{ColorFormat, CompressionType, Header},
     operations::{diff_line, line_diff},
 };
-
-pub struct DangoPicture {
-    pub header: Header,
-    pub bitmap: Vec<u8>,
-}
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -28,7 +25,13 @@ pub enum Error {
     CompressionError(#[from] CompressionError),
 }
 
-impl DangoPicture {
+/// The basic Squishy Picture type for manipulation in-memory.
+pub struct SquishyPicture {
+    pub header: Header,
+    pub bitmap: Vec<u8>,
+}
+
+impl SquishyPicture {
     /// Create a DPF from raw bytes in a particular [`ColorFormat`].
     ///
     /// The quality parameter does nothing if the compression type is not
@@ -36,7 +39,7 @@ impl DangoPicture {
     ///
     /// # Example
     /// ```ignore
-    /// let dpf_lossy = DangoPicture::from_raw(
+    /// let dpf_lossy = SquishyPicture::from_raw(
     ///     input.width(),
     ///     input.height(),
     ///     ColorFormat::Rgba32,
@@ -72,13 +75,13 @@ impl DangoPicture {
             color_format,
         };
 
-        DangoPicture {
+        Self {
             header,
             bitmap,
         }
     }
 
-    /// Convenience method over [`DangoPicture::from_raw`] which creates a
+    /// Convenience method over [`SquishyPicture::from_raw`] which creates a
     /// lossy image with a given quality.
     pub fn from_raw_lossy(
         width: u32,
@@ -97,7 +100,8 @@ impl DangoPicture {
         )
     }
 
-
+    /// Convenience method over [`SquishyPicture::from_raw`] which creates a
+    /// lossless image.
     pub fn from_raw_lossless(
         width: u32,
         height: u32,
@@ -114,8 +118,9 @@ impl DangoPicture {
         )
     }
 
-    /// Encode the image into anything that implements [Write]. Returns the
-    /// number of bytes written.
+    /// Encode the image into anything that implements [`Write`].
+    ///
+    /// Returns the number of bytes written.
     pub fn encode<O: Write + WriteBytesExt>(&self, mut output: O) -> Result<usize, Error> {
         let mut count = 0;
 
@@ -146,6 +151,9 @@ impl DangoPicture {
             },
         };
 
+        let mut inspection_file = File::create("raw_data").unwrap();
+        inspection_file.write_all(&modified_data).unwrap();
+
         // Compress the final image data using the basic LZW scheme
         let (compressed_data, compression_info) = compress(modified_data)?;
 
@@ -168,8 +176,8 @@ impl DangoPicture {
         Ok(())
     }
 
-    /// Decode the image from anything that implements [Read]
-    pub fn decode<I: Read + ReadBytesExt>(mut input: I) -> Result<DangoPicture, Error> {
+    /// Decode the image from anything that implements [`Read`]
+    pub fn decode<I: Read + ReadBytesExt>(mut input: I) -> Result<Self, Error> {
         let header = Header::read_from(&mut input)?;
 
         let compression_info = CompressionInfo::read_from(&mut input);
@@ -194,7 +202,7 @@ impl DangoPicture {
             },
         };
 
-        Ok(DangoPicture { header, bitmap })
+        Ok(Self { header, bitmap })
     }
 }
 
@@ -208,4 +216,10 @@ fn decode_varint_stream(stream: &[u8]) -> Vec<i16> {
     }
 
     output
+}
+
+pub fn open<P: AsRef<Path>>(path: P) -> Result<SquishyPicture, Error> {
+    let input = File::open(path)?;
+
+    Ok(SquishyPicture::decode(input)?)
 }

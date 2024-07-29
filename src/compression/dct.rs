@@ -98,7 +98,7 @@ pub fn idct(input: &[f32], width: usize, height: usize) -> Vec<u8> {
 
 /// JPEG 8x8 Base Quantization Matrix for a quality level of 50.
 ///
-/// Instead of using this, utilize the [`quantization_matrix`] function to
+/// Instead of using this, use the [`quantization_matrix`] function to
 /// get a quantization matrix corresponding to the image quality value.
 const BASE_QUANTIZATION_MATRIX: [u16; 64] = [
     16, 11, 10, 16,  24,  40,  51,  61,
@@ -221,7 +221,7 @@ pub fn dct_decompress(input: &[i16], parameters: DctParameters) -> Vec<u8> {
 
                 let row_offset = row_num * parameters.width;
 
-                let offset = if start_x + 8 >= parameters.width {
+                let offset = if start_x + 8 > parameters.width {
                     parameters.width % 8
                 } else {
                     8
