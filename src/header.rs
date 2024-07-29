@@ -57,6 +57,10 @@ impl Header {
         buf.into_inner().try_into().unwrap()
     }
 
+    pub fn len(&self) -> usize {
+        19
+    }
+
     pub fn read_from<T: Read + ReadBytesExt>(input: &mut T) -> Result<Self, Error> {
         let mut magic = [0u8; 8];
         input.read_exact(&mut magic).unwrap();

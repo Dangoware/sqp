@@ -33,15 +33,18 @@ impl CompressionInfo {
     pub fn write_into<T: WriteBytesExt + Write>(
         &self,
         output: &mut T,
-    ) -> Result<(), std::io::Error> {
+    ) -> Result<usize, std::io::Error> {
+        let mut size = 0;
         output.write_u32::<LE>(self.chunk_count as u32)?;
+        size += 4;
 
         for chunk in &self.chunks {
             output.write_u32::<LE>(chunk.size_compressed as u32)?;
             output.write_u32::<LE>(chunk.size_raw as u32)?;
+            size += 8;
         }
 
-        Ok(())
+        Ok(size)
     }
 
     pub fn read_from<T: Read + ReadBytesExt>(input: &mut T) -> Self {

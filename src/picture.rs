@@ -66,10 +66,14 @@ impl DangoPicture {
         }
     }
 
-    /// Encode the image into anything that implements [Write]
-    pub fn encode<O: Write + WriteBytesExt>(&self, mut output: O) -> Result<(), Error> {
+    /// Encode the image into anything that implements [Write]. Returns the
+    /// number of bytes written.
+    pub fn encode<O: Write + WriteBytesExt>(&self, mut output: O) -> Result<usize, Error> {
+        let mut count = 0;
+
         // Write out the header
         output.write_all(&self.header.to_bytes()).unwrap();
+        count += self.header.len();
 
         // Based on the compression type, modify the data accordingly
         let modified_data = match self.header.compression_type {
@@ -98,12 +102,13 @@ impl DangoPicture {
         let (compressed_data, compression_info) = compress(&modified_data)?;
 
         // Write out compression info
-        compression_info.write_into(&mut output).unwrap();
+        count += compression_info.write_into(&mut output).unwrap();
 
         // Write out compressed data
         output.write_all(&compressed_data).unwrap();
+        count += compressed_data.len();
 
-        Ok(())
+        Ok(count)
     }
 
     /// Encode and write the image out to a file.

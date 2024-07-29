@@ -9,11 +9,13 @@ pub mod picture;
 
 use std::{fs::File, io::{BufReader, BufWriter}, time::Instant};
 use header::{ColorFormat, CompressionType};
-use image::RgbaImage;
+use image::{ImageReader, RgbaImage};
 use picture::DangoPicture;
 
 fn main() {
-    let input = image::open("transparent2.png").unwrap().to_rgba8();
+    let mut input = ImageReader::open("shit.png").unwrap();
+    input.no_limits();
+    let input = input.decode().unwrap().to_rgba8();
     input.save("original.png").unwrap();
 
     let dpf_lossy = DangoPicture::from_raw(
@@ -21,7 +23,7 @@ fn main() {
         input.height(),
         ColorFormat::Rgba32,
         CompressionType::LossyDct,
-        Some(10),
+        Some(80),
         input.as_raw().clone()
     );
 
@@ -38,12 +40,9 @@ fn main() {
     println!("Encoding");
     let timer = Instant::now();
     let mut outfile = BufWriter::new(std::fs::File::create("test-lossy.dpf").unwrap());
-    dpf_lossy.encode(&mut outfile).unwrap();
+    let size = dpf_lossy.encode(&mut outfile).unwrap();
     println!("Encoding took {}ms", timer.elapsed().as_millis());
-
-    let mut outbuf = Vec::new();
-    dpf_lossy.encode(&mut outbuf).unwrap();
-    println!("Size is {}Mb", (((outbuf.len() as f32 / 1_000_000.0) * 100.0) as u32 as f32) / 100.0);
+    println!("Size is {}Mb", (((size as f32 / 1_000_000.0) * 100.0) as u32 as f32) / 100.0);
 
     println!("Decoding");
     let timer = Instant::now();
@@ -56,12 +55,9 @@ fn main() {
     println!("Encoding");
     let timer = Instant::now();
     let mut outfile = BufWriter::new(std::fs::File::create("test-lossless.dpf").unwrap());
-    dpf_lossless.encode(&mut outfile).unwrap();
+    let size = dpf_lossless.encode(&mut outfile).unwrap();
     println!("Encoding took {}ms", timer.elapsed().as_millis());
-
-    let mut outbuf = Vec::new();
-    dpf_lossless.encode(&mut outbuf).unwrap();
-    println!("Size is {}Mb", (((outbuf.len() as f32 / 1_000_000.0) * 100.0) as u32 as f32) / 100.0);
+    println!("Size is {}Mb", (((size as f32 / 1_000_000.0) * 100.0) as u32 as f32) / 100.0);
 
     println!("Decoding");
     let timer = Instant::now();
