@@ -1,19 +1,72 @@
-pub fn line_diff(width: u32, height: u32, data: &[u8]) -> Vec<u8> {
-    let mut output_buf = Vec::with_capacity((width * height * 4) as usize);
+use crate::ColorFormat;
+use rayon::prelude::*;
+
+pub fn sub_rows(width: u32, height: u32, color_format: ColorFormat, input: &[u8]) -> Vec<u8> {
+    let mut data = Vec::with_capacity(width as usize * (color_format.bpp() / 8) as usize);
+
+    let block_height = f32::ceil(height as f32 / 3.0) as u32;
+    let line_byte_count = (width * color_format.pixel_byte_count() as u32) as usize;
+
+    let mut curr_line: Vec<u8>;
+    let mut prev_line: Vec<u8> = Vec::new();
+
+    let mut i = 0;
+    for y in 0..height {
+        curr_line = input[i..i + line_byte_count].to_vec();
+
+        if y % block_height != 0 {
+            curr_line.iter_mut()
+                .zip(prev_line.iter_mut())
+                .for_each(|(curr, prev)| {
+                    *curr = curr.wrapping_sub(*prev);
+                    *prev = prev.wrapping_add(*curr);
+                });
+        } else {
+            prev_line.clone_from(&curr_line);
+        }
+
+        data.extend_from_slice(&curr_line);
+        i += line_byte_count;
+    }
+
+    if color_format.alpha_channel().is_some() {
+        let (pixels, alpha): (Vec<[u8; 3]>, Vec<u8>) =
+            data.chunks(4)
+                .map(|i| (
+                    [i[0], i[1], i[2]],
+                    i[3]
+                ))
+                .unzip();
+
+        pixels.into_iter().flatten().chain(alpha).collect()
+    } else {
+        data
+    }
+}
+
+pub fn add_rows(width: u32, height: u32, color_format: ColorFormat, data: &[u8]) -> Vec<u8> {
+    let mut output_buf = Vec::with_capacity((width * height * color_format.channels() as u32) as usize);
 
     let block_height = f32::ceil(height as f32 / 3.0) as u32;
 
-    let mut curr_line;
-    let mut prev_line = Vec::with_capacity(width as usize * 3);
-
-    let mut curr_alpha;
-    let mut prev_alpha = Vec::with_capacity(width as usize);
+    let mut curr_line: Vec<u8>;
+    let mut prev_line = Vec::new();
 
     let mut rgb_index = 0;
-    let mut alpha_index = (width * height * 3) as usize;
+    let mut alpha_index = (width * height * (color_format.channels() as u32 - 1)) as usize;
     for y in 0..height {
-        curr_line = data[rgb_index..rgb_index + width as usize * 3].to_vec();
-        curr_alpha = data[alpha_index..alpha_index + width as usize].to_vec();
+        curr_line = if color_format.alpha_channel().is_some() {
+            data[rgb_index..rgb_index + width as usize * 3]
+                .chunks(3)
+                .zip(data[alpha_index..alpha_index + width as usize].into_iter())
+                .flat_map(|(a, b)| {
+                    a.into_iter().chain(vec![b])
+                })
+                .copied()
+                .collect()
+        } else {
+            data[rgb_index..rgb_index + width as usize * 3].to_vec()
+        };
 
         if y % block_height != 0 {
             curr_line
@@ -22,81 +75,15 @@ pub fn line_diff(width: u32, height: u32, data: &[u8]) -> Vec<u8> {
                 .for_each(|(curr_p, prev_p)| {
                     *curr_p = curr_p.wrapping_add(*prev_p);
                 });
-            curr_alpha
-                .iter_mut()
-                .zip(&prev_alpha)
-                .for_each(|(curr_a, prev_a)| {
-                    *curr_a = curr_a.wrapping_add(*prev_a);
-                });
         }
 
         // Write the decoded RGBA data to the final buffer
-        curr_line
-            .windows(3)
-            .step_by(3)
-            .zip(&curr_alpha)
-            .for_each(|(curr_p, alpha_p)| {
-                output_buf.extend_from_slice(&[curr_p[0], curr_p[1], curr_p[2], *alpha_p]);
-            });
+        output_buf.extend_from_slice(&curr_line);
 
         prev_line.clone_from(&curr_line);
-        prev_alpha.clone_from(&curr_alpha);
-
         rgb_index += width as usize * 3;
         alpha_index += width as usize;
     }
 
     output_buf
-}
-
-pub fn diff_line(width: u32, height: u32, input: &[u8]) -> Vec<u8> {
-    let mut data = Vec::with_capacity(width as usize * 3);
-    let mut alpha_data = Vec::with_capacity(width as usize);
-
-    let block_height = f32::ceil(height as f32 / 3.0) as u32;
-    let pixel_byte_count = 4;
-    let line_byte_count = (width * pixel_byte_count as u32) as usize;
-
-    let mut curr_line: Vec<u8>;
-    let mut prev_line: Vec<u8> = Vec::with_capacity(width as usize * 3);
-
-    let mut curr_alpha: Vec<u8>;
-    let mut prev_alpha: Vec<u8> = Vec::with_capacity(width as usize);
-
-    let mut i = 0;
-    for y in 0..height {
-        curr_line = input[i..i + line_byte_count]
-            .windows(4)
-            .step_by(4)
-            .flat_map(|r| [r[0], r[1], r[2]])
-            .collect();
-        curr_alpha = input[i..i + line_byte_count]
-            .iter()
-            .skip(3)
-            .step_by(4)
-            .copied()
-            .collect();
-
-        if y % block_height != 0 {
-            for x in 0..width as usize * 3 {
-                curr_line[x] = curr_line[x].wrapping_sub(prev_line[x]);
-                prev_line[x] = prev_line[x].wrapping_add(curr_line[x]);
-            }
-            for x in 0..width as usize {
-                curr_alpha[x] = curr_alpha[x].wrapping_sub(prev_alpha[x]);
-                prev_alpha[x] = prev_alpha[x].wrapping_add(curr_alpha[x]);
-            }
-        } else {
-            prev_line.clone_from(&curr_line);
-            prev_alpha.clone_from(&curr_alpha);
-        }
-
-        data.extend_from_slice(&curr_line);
-        alpha_data.extend_from_slice(&curr_alpha);
-        i += line_byte_count;
-    }
-
-    data.extend_from_slice(&alpha_data);
-
-    data
 }

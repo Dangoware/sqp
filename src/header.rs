@@ -98,7 +98,7 @@ pub enum ColorFormat {
 impl ColorFormat {
     /// Bits per color channel.
     ///
-    /// Ex. Rgba32 has `8bpc`
+    /// Ex. `Rgba8` has `8bpc`
     pub fn bpc(&self) -> u8 {
         match self {
             ColorFormat::Rgba8 => 8,
@@ -108,7 +108,7 @@ impl ColorFormat {
 
     /// Bits per pixel.
     ///
-    /// Ex. Rgba32 has `32bpp`
+    /// Ex. `Rgba8` has `32bpp`
     pub fn bpp(&self) -> u16 {
         match self {
             ColorFormat::Rgba8 => 32,
@@ -118,12 +118,26 @@ impl ColorFormat {
 
     /// Number of color channels.
     ///
-    /// Ex. Rgba32 has `4` channels
-    pub fn channels(self) -> u16 {
+    /// Ex. `Rgba8` has `4` channels
+    pub fn channels(&self) -> u16 {
         match self {
             ColorFormat::Rgba8 => 4,
             ColorFormat::Rgb8 => 3,
         }
+    }
+
+    /// The channel in which alpha is contained, or [`None`] if there is none.
+    ///
+    /// Ex. `Rgba8`'s 3rd channel is alpha
+    pub fn alpha_channel(&self) -> Option<u8> {
+        match self {
+            ColorFormat::Rgba8 => Some(4),
+            ColorFormat::Rgb8 => None,
+        }
+    }
+
+    pub fn pixel_byte_count(&self) -> u16 {
+        self.bpp() / 8
     }
 }
 

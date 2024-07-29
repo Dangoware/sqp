@@ -10,7 +10,7 @@ use crate::{
     compression::{dct::{dct_compress, dct_decompress, DctParameters},
     lossless::{compress, decompress, CompressionError, CompressionInfo}},
     header::{ColorFormat, CompressionType, Header},
-    operations::{diff_line, line_diff},
+    operations::{add_rows, sub_rows},
 };
 
 #[derive(Error, Debug)]
@@ -132,7 +132,12 @@ impl SquishyPicture {
         let modified_data = match self.header.compression_type {
             CompressionType::None => &self.bitmap,
             CompressionType::Lossless => {
-                &diff_line(self.header.width, self.header.height, &self.bitmap)
+                &sub_rows(
+                    self.header.width,
+                    self.header.height,
+                    self.header.color_format,
+                    &self.bitmap
+                )
             },
             CompressionType::LossyDct => {
                 &dct_compress(
@@ -187,7 +192,7 @@ impl SquishyPicture {
         let bitmap = match header.compression_type {
             CompressionType::None => pre_bitmap,
             CompressionType::Lossless => {
-                line_diff(header.width, header.height, &pre_bitmap)
+                add_rows(header.width, header.height, header.color_format, &pre_bitmap)
             },
             CompressionType::LossyDct => {
                 dct_decompress(
