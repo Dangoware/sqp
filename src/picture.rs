@@ -29,7 +29,19 @@ pub enum Error {
 }
 
 impl DangoPicture {
-    /// Create a DPF
+    /// Create a DPF from raw bytes in a particular [`ColorFormat`].
+    ///
+    /// ## Example
+    /// ```
+    /// let dpf_lossy = DangoPicture::from_raw(
+    ///     input.width(),
+    ///     input.height(),
+    ///     ColorFormat::Rgba32,
+    ///     CompressionType::LossyDct,
+    ///     Some(80),
+    ///     input.as_raw().clone()
+    /// );
+    /// ```
     pub fn from_raw(
         width: u32,
         height: u32,

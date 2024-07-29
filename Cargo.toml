@@ -1,11 +1,14 @@
 [package]
-name = "dpf_format"
+name = "sqp"
+description = """
+The squishiest image format!
+"""
+license = "MIT"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 byteorder = "1.5.0"
-image = "0.25.2"
 integer-encoding = "4.0.0"
 rayon = "1.10.0"
 thiserror = "1.0.63"
