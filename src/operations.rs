@@ -77,7 +77,7 @@ pub fn diff_line(width: u32, height: u32, input: &[u8]) -> Vec<u8> {
             .copied()
             .collect();
 
-        if y % block_height as u32 != 0 {
+        if y % block_height != 0 {
             for x in 0..width as usize * 3 {
                 curr_line[x] = curr_line[x].wrapping_sub(prev_line[x]);
                 prev_line[x] = prev_line[x].wrapping_add(curr_line[x]);

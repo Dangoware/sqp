@@ -42,11 +42,7 @@ impl<'a, O: Write + WriteBytesExt> BitWriter<'a, O> {
 
     /// Check if the stream is aligned to a byte.
     pub fn aligned(&self) -> bool {
-        if self.bit_offset() == 0 {
-            true
-        } else {
-            false
-        }
+        self.bit_offset() == 0
     }
 
     /// Align the writer to the nearest byte by padding with zero bits.

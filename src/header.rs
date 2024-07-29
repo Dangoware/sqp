@@ -19,8 +19,8 @@ pub struct Header {
     pub compression_type: CompressionType,
 
     /// Level of compression. Only applies in Lossy mode, otherwise this value
-    /// should be set to -1.
-    pub compression_level: i8,
+    /// should be set to 0, and ignored.
+    pub quality: u8,
 
     /// Format of color data in the image.
     pub color_format: ColorFormat,
@@ -33,8 +33,8 @@ impl Default for Header {
             width: 0,
             height: 0,
             compression_type: CompressionType::Lossless,
-            compression_level: -1,
-            color_format: ColorFormat::Rgba32,
+            quality: 0,
+            color_format: ColorFormat::Rgba8,
         }
     }
 }
@@ -49,7 +49,7 @@ impl Header {
 
         // Write compression info
         buf.write_u8(self.compression_type.into()).unwrap();
-        buf.write_i8(self.compression_level).unwrap();
+        buf.write_u8(self.quality).unwrap();
 
         // Write color format
         buf.write_u8(self.color_format as u8).unwrap();
@@ -57,10 +57,13 @@ impl Header {
         buf.into_inner().try_into().unwrap()
     }
 
+    /// Length of the header in bytes.
+    #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
         19
     }
 
+    /// Create a header from something implementing [`Read`].
     pub fn read_from<T: Read + ReadBytesExt>(input: &mut T) -> Result<Self, Error> {
         let mut magic = [0u8; 8];
         input.read_exact(&mut magic).unwrap();
@@ -75,7 +78,7 @@ impl Header {
             height: input.read_u32::<LE>()?,
 
             compression_type: input.read_u8()?.try_into().unwrap(),
-            compression_level: input.read_i8()?,
+            quality: input.read_u8()?,
             color_format: input.read_u8()?.try_into().unwrap(),
         })
     }
@@ -86,10 +89,10 @@ impl Header {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ColorFormat {
     /// RGBA, 8 bits per channel
-    Rgba32 = 0,
+    Rgba8 = 0,
 
     /// RGB, 8 bits per channel
-    Rgb24 = 1,
+    Rgb8 = 1,
 }
 
 impl ColorFormat {
@@ -98,8 +101,8 @@ impl ColorFormat {
     /// Ex. Rgba32 has `8bpc`
     pub fn bpc(&self) -> u8 {
         match self {
-            ColorFormat::Rgba32 => 8,
-            ColorFormat::Rgb24 => 8,
+            ColorFormat::Rgba8 => 8,
+            ColorFormat::Rgb8 => 8,
         }
     }
 
@@ -108,8 +111,8 @@ impl ColorFormat {
     /// Ex. Rgba32 has `32bpp`
     pub fn bpp(&self) -> u16 {
         match self {
-            ColorFormat::Rgba32 => 32,
-            ColorFormat::Rgb24 => 24,
+            ColorFormat::Rgba8 => 32,
+            ColorFormat::Rgb8 => 24,
         }
     }
 
@@ -118,8 +121,8 @@ impl ColorFormat {
     /// Ex. Rgba32 has `4` channels
     pub fn channels(self) -> u16 {
         match self {
-            ColorFormat::Rgba32 => 4,
-            ColorFormat::Rgb24 => 3,
+            ColorFormat::Rgba8 => 4,
+            ColorFormat::Rgb8 => 3,
         }
     }
 }
@@ -129,8 +132,8 @@ impl TryFrom<u8> for ColorFormat {
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         Ok(match value {
-            0 => Self::Rgba32,
-            1 => Self::Rgb24,
+            0 => Self::Rgba8,
+            1 => Self::Rgb8,
             v => return Err(format!("invalid color format {v}")),
         })
     }
@@ -163,9 +166,9 @@ impl TryFrom<u8> for CompressionType {
     }
 }
 
-impl Into<u8> for CompressionType {
-    fn into(self) -> u8 {
-        match self {
+impl From<CompressionType> for u8 {
+    fn from(val: CompressionType) -> Self {
+        match val {
             CompressionType::None => 0,
             CompressionType::Lossless => 1,
             CompressionType::LossyDct => 2,

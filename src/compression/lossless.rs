@@ -111,7 +111,7 @@ pub fn compress(data: &[u8]) -> Result<(Vec<u8>, CompressionInfo), CompressionEr
 
 fn compress_lzw(data: &[u8], last: Vec<u8>) -> (usize, Vec<u8>, Vec<u8>) {
     let mut count = 0;
-    let mut dictionary: HashMap<Vec<u8>, u64> = HashMap::from_iter((0..=255).into_iter().map(|i| (vec![i], i as u64)));
+    let mut dictionary: HashMap<Vec<u8>, u64> = HashMap::from_iter((0..=255).map(|i| (vec![i], i as u64)));
     let mut dictionary_count = (dictionary.len() + 1) as u64;
 
     let mut element = Vec::new();
@@ -233,7 +233,7 @@ fn decompress_lzw(input_data: &[u8], size: usize) -> Result<Vec<u8>, Compression
     let data_size = input_data.len();
 
     let mut bit_io = BitReader::new(&mut data);
-    let mut w = dictionary.get(0).unwrap().clone();
+    let mut w = dictionary.first().unwrap().clone();
 
     let mut element;
     loop {

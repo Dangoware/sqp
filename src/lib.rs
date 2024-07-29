@@ -1,6 +1,5 @@
 //! SQP (SQuishy Picture Format) is an image format. It can be used to store
-//! image data in lossless or lossy compressed form, while remaining relatively
-//! simple.
+//! image data in lossless or lossy compressed form.
 
 mod compression {
     pub mod dct;

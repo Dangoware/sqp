@@ -81,7 +81,7 @@ pub fn idct(input: &[f32], width: usize, height: usize) -> Vec<u8> {
                         sqrt_height
                     };
 
-                    let idct = input[u * width + v] as f32 *
+                    let idct = input[u * width + v] *
                         f32::cos((2.0 * x as f32 + 1.0) * u as f32 * PI / (2.0 * width as f32)) *
                         f32::cos((2.0 * y as f32 + 1.0) * v as f32 * PI / (2.0 * height as f32));
 
@@ -137,7 +137,7 @@ pub fn quantize(input: &[f32], quant_matrix: [u16; 64]) -> Vec<i16> {
 pub fn dequantize(input: &[i16], quant_matrix: [u16; 64]) -> Vec<f32> {
     input.iter()
         .zip(quant_matrix)
-        .map(|(v, q)| (*v as i16 * q as i16) as f32)
+        .map(|(v, q)| (*v * q as i16) as f32)
         .collect()
 }
 
@@ -158,7 +158,12 @@ pub fn dct_compress(input: &[u8], parameters: DctParameters) -> Vec<Vec<i16>> {
             .collect();
 
         // Create 2d array of the channel for ease of processing
-        let mut img_2d: Vec<Vec<u8>> = channel.windows(parameters.width).step_by(parameters.width).map(|r| r.to_vec()).collect();
+        let mut img_2d: Vec<Vec<u8>> =
+            channel.windows(parameters.width)
+                .step_by(parameters.width)
+                .map(|r| r.to_vec())
+                .collect();
+
         img_2d.iter_mut().for_each(|r| r.resize(new_width, 0));
         img_2d.resize(new_height, vec![0u8; new_width]);
 
@@ -170,7 +175,7 @@ pub fn dct_compress(input: &[u8], parameters: DctParameters) -> Vec<Vec<i16>> {
             let mut chunk = Vec::new();
             for i in 0..8 {
                 let row = &img_2d[(h * 8) + i][w * 8..(w * 8) + 8];
-                chunk.extend_from_slice(&row);
+                chunk.extend_from_slice(row);
             }
 
             // Perform the DCT on the image section
@@ -201,7 +206,7 @@ pub fn dct_decompress(input: &[i16], parameters: DctParameters) -> Vec<u8> {
     input.par_chunks(new_width * new_height).enumerate().for_each(|(chan_num, channel)| {
         let decoded_image = Arc::new(Mutex::new(vec![0u8; parameters.width * parameters.height]));
         channel.par_chunks(64).enumerate().for_each(|(i, chunk)| {
-            let dequantized_dct = dequantize(&chunk, quantization_matrix);
+            let dequantized_dct = dequantize(chunk, quantization_matrix);
             let original = idct(&dequantized_dct, 8, 8);
 
             // Write rows of blocks
@@ -261,23 +266,11 @@ impl Default for DctParameters {
     fn default() -> Self {
         Self {
             quality: 80,
-            format: ColorFormat::Rgba32,
+            format: ColorFormat::Rgba8,
             width: 0,
             height: 0,
         }
     }
-}
-
-/// The results of DCT compression
-pub struct DctImage {
-    /// The DCT encoded version of each channel.
-    pub channels: Vec<Vec<i16>>,
-
-    /// New width after padding.
-    pub width: u32,
-
-    /// New height after padding.
-    pub height: u32,
 }
 
 #[cfg(test)]

@@ -31,6 +31,9 @@ pub enum Error {
 impl DangoPicture {
     /// Create a DPF from raw bytes in a particular [`ColorFormat`].
     ///
+    /// The quality parameter does nothing if the compression type is not
+    /// lossy, so it should be set to None.
+    ///
     /// ## Example
     /// ```
     /// let dpf_lossy = DangoPicture::from_raw(
@@ -47,18 +50,12 @@ impl DangoPicture {
         height: u32,
         color_format: ColorFormat,
         compression_type: CompressionType,
-        compression_level: Option<u8>,
+        quality: Option<u8>,
         bitmap: Vec<u8>,
     ) -> Self {
-        let compression_level = match compression_level {
-            Some(level) => {
-                if level < 1 || level > 100 {
-                    panic!("Compression level out of range 1..100")
-                }
-                level as i8
-            },
-            None => -1,
-        };
+        if quality.is_none() && compression_type == CompressionType::LossyDct {
+            panic!("compression level must not be `None` when compression type is lossy")
+        }
 
         let header = Header {
             magic: *b"dangoimg",
@@ -67,7 +64,10 @@ impl DangoPicture {
             height,
 
             compression_type,
-            compression_level,
+            quality: match quality {
+                Some(level) => level.clamp(1, 100),
+                None => 0,
+            },
 
             color_format,
         };
@@ -76,6 +76,42 @@ impl DangoPicture {
             header,
             bitmap,
         }
+    }
+
+    /// Convenience method over [`DangoPicture::from_raw`] which creates a
+    /// lossy image with a given quality.
+    pub fn from_raw_lossy(
+        width: u32,
+        height: u32,
+        color_format: ColorFormat,
+        quality: u8,
+        bitmap: Vec<u8>,
+    ) -> Self {
+        Self::from_raw(
+            width,
+            height,
+            color_format,
+            CompressionType::LossyDct,
+            Some(quality),
+            bitmap,
+        )
+    }
+
+
+    pub fn from_raw_lossless(
+        width: u32,
+        height: u32,
+        color_format: ColorFormat,
+        bitmap: Vec<u8>,
+    ) -> Self {
+        Self::from_raw(
+            width,
+            height,
+            color_format,
+            CompressionType::Lossless,
+            None,
+            bitmap,
+        )
     }
 
     /// Encode the image into anything that implements [Write]. Returns the
@@ -97,7 +133,7 @@ impl DangoPicture {
                 &dct_compress(
                     &self.bitmap,
                     DctParameters {
-                        quality: self.header.compression_level as u32,
+                        quality: self.header.quality as u32,
                         format: self.header.color_format,
                         width: self.header.width as usize,
                         height: self.header.height as usize,
@@ -111,7 +147,7 @@ impl DangoPicture {
         };
 
         // Compress the final image data using the basic LZW scheme
-        let (compressed_data, compression_info) = compress(&modified_data)?;
+        let (compressed_data, compression_info) = compress(modified_data)?;
 
         // Write out compression info
         count += compression_info.write_into(&mut output).unwrap();
@@ -146,25 +182,10 @@ impl DangoPicture {
                 line_diff(header.width, header.height, &pre_bitmap)
             },
             CompressionType::LossyDct => {
-                let mut decoded = Vec::new();
-                let mut offset = 0;
-                loop {
-                    if offset > pre_bitmap.len() {
-                        break;
-                    }
-
-                    if let Some(num) = i16::decode_var(&pre_bitmap[offset..]) {
-                        offset += num.1;
-                        decoded.push(num.0 as i16);
-                    } else {
-                        break;
-                    }
-                }
-
                 dct_decompress(
-                    &decoded,
+                    &decode_varint_stream(&pre_bitmap),
                     DctParameters {
-                        quality: header.compression_level as u32,
+                        quality: header.quality as u32,
                         format: header.color_format,
                         width: header.width as usize,
                         height: header.height as usize,
@@ -175,4 +196,16 @@ impl DangoPicture {
 
         Ok(DangoPicture { header, bitmap })
     }
+}
+
+fn decode_varint_stream(stream: &[u8]) -> Vec<i16> {
+    let mut output = Vec::new();
+    let mut offset = 0;
+
+    while let Some(num) = i16::decode_var(&stream[offset..]) {
+        offset += num.1;
+        output.push(num.0);
+    }
+
+    output
 }
