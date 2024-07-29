@@ -39,7 +39,7 @@ impl SquishyPicture {
     ///
     /// # Example
     /// ```ignore
-    /// let dpf_lossy = SquishyPicture::from_raw(
+    /// let sqp = SquishyPicture::from_raw(
     ///     input.width(),
     ///     input.height(),
     ///     ColorFormat::Rgba32,
@@ -83,6 +83,17 @@ impl SquishyPicture {
 
     /// Convenience method over [`SquishyPicture::from_raw`] which creates a
     /// lossy image with a given quality.
+    ///
+    /// # Example
+    /// ```ignore
+    /// let sqp = SquishyPicture::from_raw_lossy(
+    ///     input.width(),
+    ///     input.height(),
+    ///     ColorFormat::Rgba32,
+    ///     80,
+    ///     input.as_raw().clone()
+    /// );
+    /// ```
     pub fn from_raw_lossy(
         width: u32,
         height: u32,
@@ -102,6 +113,16 @@ impl SquishyPicture {
 
     /// Convenience method over [`SquishyPicture::from_raw`] which creates a
     /// lossless image.
+    ///
+    /// # Example
+    /// ```ignore
+    /// let sqp = SquishyPicture::from_raw_lossless(
+    ///     input.width(),
+    ///     input.height(),
+    ///     ColorFormat::Rgba32,
+    ///     input.as_raw().clone()
+    /// );
+    /// ```
     pub fn from_raw_lossless(
         width: u32,
         height: u32,

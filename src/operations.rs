@@ -1,5 +1,4 @@
 use crate::ColorFormat;
-use rayon::prelude::*;
 
 pub fn sub_rows(width: u32, height: u32, color_format: ColorFormat, input: &[u8]) -> Vec<u8> {
     let mut data = Vec::with_capacity(width as usize * color_format.pbc());

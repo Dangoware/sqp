@@ -1,3 +1,5 @@
+//! Structs and enums which are included in the header of SQP files.
+
 use byteorder::{ReadBytesExt, WriteBytesExt, LE};
 use std::io::{Cursor, Read, Write};
 
