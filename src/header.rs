@@ -93,6 +93,12 @@ pub enum ColorFormat {
 
     /// RGB, 8 bits per channel
     Rgb8 = 1,
+
+    /// Grayscale with alpha, 8 bits per channel
+    GrayA8 = 2,
+
+    /// Grayscale, 8 bits per channel
+    Gray8 = 3,
 }
 
 impl ColorFormat {
@@ -101,8 +107,10 @@ impl ColorFormat {
     /// Ex. `Rgba8` has `8bpc`
     pub fn bpc(&self) -> u8 {
         match self {
-            ColorFormat::Rgba8 => 8,
-            ColorFormat::Rgb8 => 8,
+            Self::Rgba8 => 8,
+            Self::Rgb8 => 8,
+            Self::GrayA8 => 8,
+            Self::Gray8 => 8,
         }
     }
 
@@ -111,8 +119,10 @@ impl ColorFormat {
     /// Ex. `Rgba8` has `32bpp`
     pub fn bpp(&self) -> u16 {
         match self {
-            ColorFormat::Rgba8 => 32,
-            ColorFormat::Rgb8 => 24,
+            Self::Rgba8 => 32,
+            Self::Rgb8 => 24,
+            Self::GrayA8 => 16,
+            Self::Gray8 => 8,
         }
     }
 
@@ -121,23 +131,30 @@ impl ColorFormat {
     /// Ex. `Rgba8` has `4` channels
     pub fn channels(&self) -> u16 {
         match self {
-            ColorFormat::Rgba8 => 4,
-            ColorFormat::Rgb8 => 3,
+            Self::Rgba8 => 4,
+            Self::Rgb8 => 3,
+            Self::GrayA8 => 2,
+            Self::Gray8 => 1,
         }
     }
 
     /// The channel in which alpha is contained, or [`None`] if there is none.
     ///
     /// Ex. `Rgba8`'s 3rd channel is alpha
-    pub fn alpha_channel(&self) -> Option<u8> {
+    pub fn alpha_channel(&self) -> Option<usize> {
         match self {
-            ColorFormat::Rgba8 => Some(4),
-            ColorFormat::Rgb8 => None,
+            Self::Rgba8 => Some(3),
+            Self::Rgb8 => None,
+            Self::GrayA8 => Some(1),
+            Self::Gray8 => None,
         }
     }
 
-    pub fn pixel_byte_count(&self) -> u16 {
-        self.bpp() / 8
+    /// Pixel Byte Count, The number of bytes per pixel.
+    ///
+    /// Convenience method over [`Self::bpp`]
+    pub fn pbc(&self) -> usize {
+        (self.bpp() / 8).into()
     }
 }
 
@@ -148,6 +165,8 @@ impl TryFrom<u8> for ColorFormat {
         Ok(match value {
             0 => Self::Rgba8,
             1 => Self::Rgb8,
+            2 => Self::GrayA8,
+            3 => Self::Gray8,
             v => return Err(format!("invalid color format {v}")),
         })
     }

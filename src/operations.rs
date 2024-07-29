@@ -2,10 +2,10 @@ use crate::ColorFormat;
 use rayon::prelude::*;
 
 pub fn sub_rows(width: u32, height: u32, color_format: ColorFormat, input: &[u8]) -> Vec<u8> {
-    let mut data = Vec::with_capacity(width as usize * (color_format.bpp() / 8) as usize);
+    let mut data = Vec::with_capacity(width as usize * color_format.pbc());
 
     let block_height = f32::ceil(height as f32 / 3.0) as u32;
-    let line_byte_count = (width * color_format.pixel_byte_count() as u32) as usize;
+    let line_byte_count = (width * color_format.pbc() as u32) as usize;
 
     let mut curr_line: Vec<u8>;
     let mut prev_line: Vec<u8> = Vec::new();
@@ -30,22 +30,22 @@ pub fn sub_rows(width: u32, height: u32, color_format: ColorFormat, input: &[u8]
     }
 
     if color_format.alpha_channel().is_some() {
-        let (pixels, alpha): (Vec<[u8; 3]>, Vec<u8>) =
-            data.chunks(4)
+        let (pixels, alpha): (Vec<&[u8]>, Vec<u8>) =
+            data.chunks(color_format.pbc())
                 .map(|i| (
-                    [i[0], i[1], i[2]],
-                    i[3]
+                    &i[..color_format.pbc() - 1],
+                    i[color_format.alpha_channel().unwrap()]
                 ))
                 .unzip();
 
-        pixels.into_iter().flatten().chain(alpha).collect()
+        pixels.into_iter().flatten().copied().chain(alpha).collect()
     } else {
         data
     }
 }
 
 pub fn add_rows(width: u32, height: u32, color_format: ColorFormat, data: &[u8]) -> Vec<u8> {
-    let mut output_buf = Vec::with_capacity((width * height * color_format.channels() as u32) as usize);
+    let mut output_buf = Vec::with_capacity((width * height * color_format.pbc() as u32) as usize);
 
     let block_height = f32::ceil(height as f32 / 3.0) as u32;
 
@@ -53,11 +53,12 @@ pub fn add_rows(width: u32, height: u32, color_format: ColorFormat, data: &[u8])
     let mut prev_line = Vec::new();
 
     let mut rgb_index = 0;
-    let mut alpha_index = (width * height * (color_format.channels() as u32 - 1)) as usize;
+    let mut alpha_index = (width * height * (color_format.pbc() - 1) as u32) as usize;
     for y in 0..height {
         curr_line = if color_format.alpha_channel().is_some() {
-            data[rgb_index..rgb_index + width as usize * 3]
-                .chunks(3)
+            // Interleave the offset alpha into the RGB bytes
+            data[rgb_index..rgb_index + width as usize * (color_format.pbc() - 1)]
+                .chunks(color_format.pbc() - 1)
                 .zip(data[alpha_index..alpha_index + width as usize].into_iter())
                 .flat_map(|(a, b)| {
                     a.into_iter().chain(vec![b])
@@ -65,7 +66,7 @@ pub fn add_rows(width: u32, height: u32, color_format: ColorFormat, data: &[u8])
                 .copied()
                 .collect()
         } else {
-            data[rgb_index..rgb_index + width as usize * 3].to_vec()
+            data[rgb_index..rgb_index + width as usize * color_format.pbc()].to_vec()
         };
 
         if y % block_height != 0 {
@@ -81,7 +82,11 @@ pub fn add_rows(width: u32, height: u32, color_format: ColorFormat, data: &[u8])
         output_buf.extend_from_slice(&curr_line);
 
         prev_line.clone_from(&curr_line);
-        rgb_index += width as usize * 3;
+        rgb_index += if color_format.alpha_channel().is_some() {
+            width as usize * (color_format.pbc() - 1)
+        } else {
+            width as usize * color_format.pbc()
+        };
         alpha_index += width as usize;
     }
 

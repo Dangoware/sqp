@@ -156,9 +156,6 @@ impl SquishyPicture {
             },
         };
 
-        let mut inspection_file = File::create("raw_data").unwrap();
-        inspection_file.write_all(&modified_data).unwrap();
-
         // Compress the final image data using the basic LZW scheme
         let (compressed_data, compression_info) = compress(modified_data)?;
 
@@ -192,7 +189,12 @@ impl SquishyPicture {
         let bitmap = match header.compression_type {
             CompressionType::None => pre_bitmap,
             CompressionType::Lossless => {
-                add_rows(header.width, header.height, header.color_format, &pre_bitmap)
+                add_rows(
+                    header.width,
+                    header.height,
+                    header.color_format,
+                    &pre_bitmap
+                )
             },
             CompressionType::LossyDct => {
                 dct_decompress(
