@@ -1,7 +1,7 @@
 //! Structs and enums which are included in the header of SQP files.
 
 use byteorder::{ReadBytesExt, WriteBytesExt, LE};
-use std::io::{Cursor, Read, Write};
+use std::io::{self, Read, Write};
 
 use crate::picture::Error;
 
@@ -42,21 +42,26 @@ impl Default for Header {
 }
 
 impl Header {
-    pub fn to_bytes(&self) -> [u8; 19] {
-        let mut buf = Cursor::new(Vec::new());
-
-        buf.write_all(&self.magic).unwrap();
-        buf.write_u32::<LE>(self.width).unwrap();
-        buf.write_u32::<LE>(self.height).unwrap();
+    /// Write the header into a byte stream implementing [`Write`].
+    ///
+    /// Returns the number of bytes written.
+    pub fn write_into<W: Write + WriteBytesExt>(&self, output: &mut W) -> Result<usize, io::Error> {
+        let mut count = 0;
+        output.write_all(&self.magic)?;
+        output.write_u32::<LE>(self.width)?;
+        output.write_u32::<LE>(self.height)?;
+        count += 16;
 
         // Write compression info
-        buf.write_u8(self.compression_type.into()).unwrap();
-        buf.write_u8(self.quality).unwrap();
+        output.write_u8(self.compression_type.into())?;
+        output.write_u8(self.quality)?;
+        count += 2;
 
         // Write color format
-        buf.write_u8(self.color_format as u8).unwrap();
+        output.write_u8(self.color_format as u8)?;
+        count += 1;
 
-        buf.into_inner().try_into().unwrap()
+        Ok(count)
     }
 
     /// Length of the header in bytes.
@@ -65,13 +70,14 @@ impl Header {
         19
     }
 
-    /// Create a header from something implementing [`Read`].
-    pub fn read_from<T: Read + ReadBytesExt>(input: &mut T) -> Result<Self, Error> {
+    /// Create a header from a byte stream implementing [`Read`].
+    pub fn read_from<R: Read + ReadBytesExt>(input: &mut R) -> Result<Self, Error> {
         let mut magic = [0u8; 8];
         input.read_exact(&mut magic).unwrap();
 
         if magic != *b"dangoimg" {
-            return Err(Error::InvalidIdentifier(magic));
+            let bad_id = String::from_utf8_lossy(&magic).into_owned();
+            return Err(Error::InvalidIdentifier(bad_id));
         }
 
         Ok(Header {

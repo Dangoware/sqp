@@ -13,14 +13,18 @@ use crate::{
     operations::{add_rows, sub_rows},
 };
 
+/// An error which occured while manipulating a [`SquishyPicture`].
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("incorrect identifier, got {0:02X?}")]
-    InvalidIdentifier([u8; 8]),
+    /// The file signature was invalid. Must be "dangoimg".
+    #[error("incorrect signature, expected \"dangoimg\" got {0:?}")]
+    InvalidIdentifier(String),
 
+    /// Any I/O operation failed.
     #[error("io operation failed: {0}")]
     IoError(#[from] io::Error),
 
+    /// There was an error while compressing or decompressing.
     #[error("compression operation failed: {0}")]
     CompressionError(#[from] CompressionError),
 }
@@ -146,8 +150,7 @@ impl SquishyPicture {
         let mut count = 0;
 
         // Write out the header
-        output.write_all(&self.header.to_bytes()).unwrap();
-        count += self.header.len();
+        count += self.header.write_into(&mut output)?;
 
         // Based on the compression type, modify the data accordingly
         let modified_data = match self.header.compression_type {
@@ -241,6 +244,7 @@ impl SquishyPicture {
     }
 }
 
+/// Decode a stream encoded as varints.
 fn decode_varint_stream(stream: &[u8]) -> Vec<i16> {
     let mut output = Vec::new();
     let mut offset = 0;
@@ -253,6 +257,10 @@ fn decode_varint_stream(stream: &[u8]) -> Vec<i16> {
     output
 }
 
+/// Open an SQP from a given path. Convenience method around
+/// [`SquishyPicture::decode`]. Returns a [`Result<SquishyPicture>`].
+///
+/// If you are loading from memory, use [`SquishyPicture::decode`] instead.
 pub fn open<P: AsRef<Path>>(path: P) -> Result<SquishyPicture, Error> {
     let input = File::open(path)?;
 
