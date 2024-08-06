@@ -27,25 +27,25 @@ pub enum Error {
 
 /// The basic Squishy Picture type for manipulation in-memory.
 pub struct SquishyPicture {
-    pub header: Header,
-    pub bitmap: Vec<u8>,
+    header: Header,
+    bitmap: Vec<u8>,
 }
 
 impl SquishyPicture {
     /// Create a DPF from raw bytes in a particular [`ColorFormat`].
     ///
     /// The quality parameter does nothing if the compression type is not
-    /// lossy, so it should be set to None.
+    /// lossy, so it must be set to None.
     ///
     /// # Example
-    /// ```ignore
-    /// let sqp = SquishyPicture::from_raw(
-    ///     input.width(),
-    ///     input.height(),
-    ///     ColorFormat::Rgba32,
-    ///     CompressionType::LossyDct,
+    /// ```
+    /// let sqp = sqp::SquishyPicture::from_raw(
+    ///     1920,
+    ///     1080,
+    ///     sqp::ColorFormat::Rgba8,
+    ///     sqp::CompressionType::LossyDct,
     ///     Some(80),
-    ///     input.as_raw().clone()
+    ///     vec![0u8; (1920 * 1080) * 4]
     /// );
     /// ```
     pub fn from_raw(
@@ -85,13 +85,13 @@ impl SquishyPicture {
     /// lossy image with a given quality.
     ///
     /// # Example
-    /// ```ignore
-    /// let sqp = SquishyPicture::from_raw_lossy(
-    ///     input.width(),
-    ///     input.height(),
-    ///     ColorFormat::Rgba32,
+    /// ```
+    /// let sqp = sqp::SquishyPicture::from_raw_lossy(
+    ///     1920,
+    ///     1080,
+    ///     sqp::ColorFormat::Rgba8,
     ///     80,
-    ///     input.as_raw().clone()
+    ///     vec![0u8; (1920 * 1080) * 4]
     /// );
     /// ```
     pub fn from_raw_lossy(
@@ -117,10 +117,10 @@ impl SquishyPicture {
     /// # Example
     /// ```ignore
     /// let sqp = SquishyPicture::from_raw_lossless(
-    ///     input.width(),
-    ///     input.height(),
-    ///     ColorFormat::Rgba32,
-    ///     input.as_raw().clone()
+    ///     1920,
+    ///     1080,
+    ///     sqp::ColorFormat::Rgba8,
+    ///     vec![0u8; (1920 * 1080) * 4]
     /// );
     /// ```
     pub fn from_raw_lossless(
@@ -191,6 +191,8 @@ impl SquishyPicture {
     }
 
     /// Encode and write the image out to a file.
+    ///
+    /// Convenience method over [`SquishyPicture::encode`]
     pub fn save<P: ?Sized + AsRef<std::path::Path>>(&self, path: &P) -> Result<(), Error> {
         let mut out_file = BufWriter::new(File::create(path.as_ref())?);
 
@@ -231,6 +233,11 @@ impl SquishyPicture {
         };
 
         Ok(Self { header, bitmap })
+    }
+
+    /// Get the underlying raw buffer as a reference
+    pub fn as_raw(&self) -> &Vec<u8> {
+        &self.bitmap
     }
 }
 

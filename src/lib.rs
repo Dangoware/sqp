@@ -65,10 +65,10 @@ pub mod header;
 pub use picture::SquishyPicture;
 
 #[doc(inline)]
+pub use picture::open;
+
+#[doc(inline)]
 pub use header::ColorFormat;
 
 #[doc(inline)]
 pub use header::CompressionType;
-
-#[doc(inline)]
-pub use picture::open;
