@@ -6,7 +6,7 @@ The squishiest image format!
 repository = "https://github.com/Dangoware/sqp"
 license = "MIT OR Apache-2.0"
 authors = ["G2 <ke0bhogsg@gmail.com>"]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 categories = ["encoding", "compression", "graphics", "multimedia::images", "multimedia::encoding"]
 
