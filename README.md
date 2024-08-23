@@ -1,8 +1,7 @@
 <p align="center">
-  <img width="400px" src="https://github.com/user-attachments/assets/98f94c1c-ed6f-49a3-b906-c328035d981e">
+  <img title="SQP" alt="SQP Logo" width="500px" src="https://github.com/user-attachments/assets/85abfb2f-6240-42d7-bdef-2103d6f83765">
 </p>
 
-# SQP
 **SQP** (**SQ**uishy **P**icture Format) is an image format designed 
 for ease of implementation and learning about compression and image formats
 while attaining a relatively good compression ratio. The general idea is to
