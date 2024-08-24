@@ -29,3 +29,14 @@ speeds.
   - Decoder-based frame interpolation
 - Floating point color
 - Metadata?
+
+## Examples
+All examples are at 30% quality in both JPEG and SQP.
+
+| Original | JPEG | SQP |
+|----------|--------------|-------------|
+| <img width="300px" src="https://github.com/user-attachments/assets/e4f7b620-4cf5-407d-851b-800c52c8a14d"> | <img width="300px" src="https://github.com/user-attachments/assets/84691e8c-2f73-4a1d-b979-0863066b159f"> | <img width="300px" src="https://github.com/user-attachments/assets/ccaa8770-b641-437f-80d1-3658f94c2e21"> |
+| <img width="300px" src="https://github.com/user-attachments/assets/f0056e3b-8988-4d0d-88bf-bc73ac5b8be0"> | <img width="300px" src="https://github.com/user-attachments/assets/400c4072-ba69-45d7-8051-46a4e2867c7f"> | <img width="300px" src="https://github.com/user-attachments/assets/c4c84f64-7564-433a-a922-17da472578d9"> |
+
+Images obtained from the following source:
+[https://r0k.us/graphics/kodak/](https://r0k.us/graphics/kodak/)
