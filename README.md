@@ -18,6 +18,7 @@ speeds.
 - Support for various color formats (RGBA, Grayscale, etc.)
 - Decent compression ratios, the lossless compression can often beat PNG
   especially on images with transparency
+- Lossy alpha compression!
 - Relatively simple
 - Squishy! 🍡
 
