@@ -100,6 +100,9 @@ pub fn idct(input: &[f32], width: usize, height: usize) -> Vec<u8> {
 ///
 /// Instead of using this, use the [`quantization_matrix`] function to
 /// get a quantization matrix corresponding to the image quality value.
+///
+/// TODO: In the future, it would be cool to figure out how to generate a
+/// quantization matrix of any size.
 const BASE_QUANTIZATION_MATRIX: [u16; 64] = [
     16, 11, 10, 16,  24,  40,  51,  61,
     12, 12, 14, 19,  26,  58,  60,  55,

@@ -264,5 +264,5 @@ fn decode_varint_stream(stream: &[u8]) -> Vec<i16> {
 pub fn open<P: AsRef<Path>>(path: P) -> Result<SquishyPicture, Error> {
     let input = File::open(path)?;
 
-    Ok(SquishyPicture::decode(input)?)
+    SquishyPicture::decode(input)
 }

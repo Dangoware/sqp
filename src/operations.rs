@@ -58,9 +58,9 @@ pub fn add_rows(width: u32, height: u32, color_format: ColorFormat, data: &[u8])
             // Interleave the offset alpha into the RGB bytes
             data[rgb_index..rgb_index + width as usize * (color_format.pbc() - 1)]
                 .chunks(color_format.pbc() - 1)
-                .zip(data[alpha_index..alpha_index + width as usize].into_iter())
+                .zip(data[alpha_index..alpha_index + width as usize].iter())
                 .flat_map(|(a, b)| {
-                    a.into_iter().chain(vec![b])
+                    a.iter().chain(vec![b])
                 })
                 .copied()
                 .collect()

@@ -18,8 +18,10 @@
 //! let width = 2;
 //! let height = 2;
 //! let bitmap = vec![
-//!     255, 255, 255, 255, 0, 255, 0, 128,
-//!     255, 255, 255, 255, 0, 255, 0, 128
+//!     0xFF, 0xFF, 0xFF, 0xFF,
+//!     0x00, 0x80, 0x00, 0x80,
+//!     0xFF, 0xFF, 0xFF, 0xFF,
+//!     0x00, 0x80, 0x00, 0x80,
 //! ];
 //!
 //! // Create a 2×2 image in memory. Nothing is compressed or encoded
