@@ -2,6 +2,9 @@
   <img title="SQP" alt="SQP Logo" width="500px" src="https://github.com/user-attachments/assets/85abfb2f-6240-42d7-bdef-2103d6f83765">
 </p>
 
+[![Lib.rs Version](https://img.shields.io/crates/v/sqp?style=for-the-badge&logo=rust&label=lib.rs&color=%23a68bfc)](https://lib.rs/crates/sqp)
+[![docs.rs](https://img.shields.io/docsrs/cross_usb?style=for-the-badge)](https://docs.rs/sqp/)
+
 **SQP** (**SQ**uishy **P**icture Format) is an image format designed 
 for ease of implementation and learning about compression and image formats
 while attaining a relatively good compression ratio. The general idea is to
