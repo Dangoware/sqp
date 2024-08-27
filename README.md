@@ -1,5 +1,5 @@
 <p align="center">
-  <img title="SQP" alt="SQP Logo" width="500px" src="https://github.com/user-attachments/assets/85abfb2f-6240-42d7-bdef-2103d6f83765">
+  <img title="SQP" alt="SQP Logo" width="500px" src="https://github.com/user-attachments/assets/cf2fd7f4-f825-4bb4-9427-1b7181be4639">
 </p>
 
 [![Lib.rs Version](https://img.shields.io/crates/v/sqp?style=for-the-badge&logo=rust&label=lib.rs&color=%23a68bfc)](https://lib.rs/crates/sqp)
