@@ -15,11 +15,11 @@ struct Cli {
     command: Subcommands,
 
     /// Overwrite output files
-    #[arg(short = 'n', long = "overwrite", conflicts_with = "assumeno")]
+    #[arg(short = 'y', long = "overwrite", conflicts_with = "assumeno")]
     assumeyes: bool,
 
     /// Do not overwrite output files
-    #[arg(short = 'y', long = "preserve", conflicts_with = "assumeyes")]
+    #[arg(short = 'n', long = "preserve", conflicts_with = "assumeyes")]
     assumeno: bool,
 }
 
