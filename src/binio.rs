@@ -1,9 +1,7 @@
 use std::io::{Read, Write};
 
-use byteorder::{ReadBytesExt, WriteBytesExt};
-
 /// A simple way to write individual bits to an input implementing [Write].
-pub struct BitWriter<'a, O: Write + WriteBytesExt> {
+pub struct BitWriter<'a, O: Write> {
     output: &'a mut O,
 
     current_byte: u8,
@@ -14,7 +12,7 @@ pub struct BitWriter<'a, O: Write + WriteBytesExt> {
     byte_size: usize,
 }
 
-impl<'a, O: Write + WriteBytesExt> BitWriter<'a, O> {
+impl<'a, O: Write> BitWriter<'a, O> {
     /// Create a new BitWriter wrapper around something which
     /// implements [Write].
     pub fn new(output: &'a mut O) -> Self {
@@ -40,7 +38,7 @@ impl<'a, O: Write + WriteBytesExt> BitWriter<'a, O> {
         self.byte_offset += 1;
 
         // Write out the current byte unfinished
-        self.output.write_u8(self.current_byte).unwrap();
+        self.output.write_all(&[self.current_byte]).unwrap();
         self.current_byte = 0;
     }
 
@@ -69,7 +67,7 @@ impl<'a, O: Write + WriteBytesExt> BitWriter<'a, O> {
                 self.byte_offset += 1;
                 self.bit_offset = 0;
 
-                self.output.write_u8(self.current_byte).unwrap();
+                self.output.write_all(&[self.current_byte]).unwrap();
                 self.current_byte = 0;
             }
         }
@@ -95,7 +93,7 @@ impl<'a, O: Write + WriteBytesExt> BitWriter<'a, O> {
 }
 
 /// A simple way to read individual bits from an input implementing [Read].
-pub struct BitReader<'a, I: Read + ReadBytesExt> {
+pub struct BitReader<'a, I: Read> {
     input: &'a mut I,
 
     current_byte: Option<u8>,
@@ -104,15 +102,16 @@ pub struct BitReader<'a, I: Read + ReadBytesExt> {
     bit_offset: usize,
 }
 
-impl<'a, I: Read + ReadBytesExt> BitReader<'a, I> {
+impl<'a, I: Read> BitReader<'a, I> {
     /// Create a new BitReader wrapper around something which
     /// implements [Write].
     pub fn new(input: &'a mut I) -> Self {
-        let first = input.read_u8().unwrap();
+        let mut buf = [0u8];
+        input.read_exact(&mut buf).unwrap();
         Self {
             input,
 
-            current_byte: Some(first),
+            current_byte: Some(buf[0]),
 
             byte_offset: 0,
             bit_offset: 0,
@@ -145,7 +144,10 @@ impl<'a, I: Read + ReadBytesExt> BitReader<'a, I> {
                 self.byte_offset += 1;
                 self.bit_offset = 0;
 
-                self.current_byte = Some(self.input.read_u8().unwrap());
+                let mut buf = [0u8];
+                self.input.read_exact(&mut buf).unwrap();
+
+                self.current_byte = Some(buf[0]);
             }
 
             result |= bit_value << i;
