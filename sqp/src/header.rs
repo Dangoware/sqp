@@ -7,6 +7,7 @@ use crate::picture::Error;
 
 /// A DPF file header. This must be included at the beginning
 /// of a valid DPF file.
+#[derive(Debug, Clone, Copy)]
 pub struct Header {
     /// Identifier. Must be set to "dangoimg".
     pub magic: [u8; 8],

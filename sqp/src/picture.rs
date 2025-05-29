@@ -1,8 +1,6 @@
 //! Functions and other utilities surrounding the [`SquishyPicture`] type.
 
 use std::{fs::File, io::{self, BufWriter, Read, Write}, path::Path};
-
-use byteorder::{ReadBytesExt, WriteBytesExt};
 use integer_encoding::VarInt;
 use thiserror::Error;
 
@@ -146,7 +144,7 @@ impl SquishyPicture {
     /// Encode the image into anything that implements [`Write`].
     ///
     /// Returns the number of bytes written.
-    pub fn encode<O: Write + WriteBytesExt>(&self, mut output: O) -> Result<usize, Error> {
+    pub fn encode<O: Write>(&self, mut output: O) -> Result<usize, Error> {
         let mut count = 0;
 
         // Write out the header
@@ -205,14 +203,14 @@ impl SquishyPicture {
     }
 
     /// Decode the image from anything that implements [`Read`]
-    pub fn decode<I: Read + ReadBytesExt>(mut input: I) -> Result<Self, Error> {
+    pub fn decode<I: Read>(mut input: I) -> Result<Self, Error> {
         let header = Header::read_from(&mut input)?;
 
         let compression_info = CompressionInfo::read_from(&mut input);
 
         let pre_bitmap = decompress(&mut input, &compression_info);
 
-        let bitmap = match header.compression_type {
+        let mut bitmap = match header.compression_type {
             CompressionType::None => pre_bitmap,
             CompressionType::Lossless => {
                 add_rows(
@@ -235,12 +233,33 @@ impl SquishyPicture {
             },
         };
 
+        bitmap.truncate(header.width as usize * header.height as usize * header.color_format.pbc());
+
         Ok(Self { header, bitmap })
     }
 
     /// Get the underlying raw buffer as a reference
     pub fn as_raw(&self) -> &Vec<u8> {
         &self.bitmap
+    }
+
+    /// Get the underlying raw buffer
+    pub fn into_raw(self) -> Vec<u8> {
+        self.bitmap
+    }
+
+    /// The width of the image in pixels
+    pub fn width(&self) -> u32 {
+        self.header.width
+    }
+
+    /// The height of the image in pixels
+    pub fn height(&self) -> u32 {
+        self.header.height
+    }
+
+    pub fn color_format(&self) -> ColorFormat {
+        self.header.color_format
     }
 }
 
