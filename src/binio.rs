@@ -35,16 +35,6 @@ impl<'a, O: Write + WriteBytesExt> BitWriter<'a, O> {
         self.byte_size
     }
 
-    /// Get the bit offset within the current byte.
-    pub fn bit_offset(&self) -> u8 {
-        self.bit_offset as u8
-    }
-
-    /// Check if the stream is aligned to a byte.
-    pub fn aligned(&self) -> bool {
-        self.bit_offset() == 0
-    }
-
     /// Align the writer to the nearest byte by padding with zero bits.
     pub fn flush(&mut self) {
         self.byte_offset += 1;
@@ -84,7 +74,7 @@ impl<'a, O: Write + WriteBytesExt> BitWriter<'a, O> {
             }
         }
 
-        self.byte_size = self.byte_offset + (self.bit_offset + 7) / 8;
+        self.byte_size = self.byte_offset + self.bit_offset.div_ceil(8);
     }
 
     /// Write some bytes to the output.
@@ -100,7 +90,7 @@ impl<'a, O: Write + WriteBytesExt> BitWriter<'a, O> {
             .unwrap();
         self.byte_offset += byte_len;
 
-        self.byte_size = self.byte_offset + (self.bit_offset + 7) / 8;
+        self.byte_size = self.byte_offset + self.bit_offset.div_ceil(8);
     }
 }
 
