@@ -7,7 +7,7 @@ authors.workspace = true
 [dependencies]
 anyhow = "1.0"
 clap = { version = "4.5", features = ["derive"] }
-image = "0.25"
+image = { version = "0.25", default-features = false, features = ["bmp", "gif", "ico", "jpeg", "png", "pnm", "qoi", "rayon", "tga", "tiff", "webp"] }
 sqp = { path = "../sqp" }
 text_io = "0.1"
 
